@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Wrench,
 } from "lucide-react";
+import { buildApiUrl } from "../../hooks/use-api";
 
 // -- Status rendering helpers --
 
@@ -73,6 +74,41 @@ function formatDuration(startedAt: number, completedAt?: number): string {
   const ms = (completedAt ?? Date.now()) - startedAt;
   const secs = Math.round(ms / 1000);
   return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+function encodeProjectPath(path: string): string {
+  return path.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+
+function extractResultPath(result: string | undefined, label: string): string | null {
+  if (!result) return null;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = result.match(new RegExp(`^${escaped}:\\s*(.+)$`, "im"));
+  const path = match?.[1]?.trim();
+  return path || null;
+}
+
+function ShortFictionResultPreview({ exec }: { exec: ToolExecution }) {
+  if (exec.tool !== "short_fiction_run" || exec.status !== "completed") return null;
+  const coverPath = extractResultPath(exec.result, "Cover image");
+  if (!coverPath || !/\.(png|jpe?g|webp)$/iu.test(coverPath)) return null;
+
+  const coverUrl = buildApiUrl(`/project/files/${encodeProjectPath(coverPath)}`);
+  if (!coverUrl) return null;
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-border/40 bg-background/70">
+      <img
+        src={coverUrl}
+        alt="短篇封面"
+        className="block max-h-[360px] w-full object-contain bg-muted/20"
+        loading="lazy"
+      />
+      <div className="border-t border-border/40 px-3 py-2 text-[11px] text-muted-foreground break-all">
+        {coverPath}
+      </div>
+    </div>
+  );
 }
 
 // -- Live elapsed timer hook --
@@ -145,6 +181,7 @@ function PipelineExecution({ exec }: { exec: ToolExecution }) {
               {exec.error}
             </div>
           )}
+          <ShortFictionResultPreview exec={exec} />
         </div>
       </CollapsibleContent>
     </Collapsible>

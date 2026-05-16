@@ -1832,6 +1832,39 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     });
   });
 
+  app.get("/api/v1/project/files/:file{.+}", async (c) => {
+    const file = c.req.param("file");
+    const resolved = resolve(root, file);
+    const rel = relative(root, resolved);
+    if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+      return c.json({ error: "Invalid project file path" }, 400);
+    }
+
+    const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
+    const contentTypes: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+    };
+    const contentType = contentTypes[ext];
+    if (!contentType) {
+      return c.json({ error: "Unsupported project file type" }, 415);
+    }
+
+    try {
+      const content = await readFile(resolved);
+      return new Response(content, {
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch {
+      return c.notFound();
+    }
+  });
+
   // --- Config editing ---
 
   app.put("/api/v1/project", async (c) => {

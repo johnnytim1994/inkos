@@ -1952,6 +1952,26 @@ describe("createStudioServer daemon lifecycle", () => {
     });
   });
 
+  it("serves generated project cover images without exposing arbitrary files", async () => {
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+    const imagePath = join(root, "shorts", "demo", "final", "cover.png");
+    await mkdir(join(root, "shorts", "demo", "final"), { recursive: true });
+    await writeFile(imagePath, Buffer.from("fake-png"));
+    await writeFile(join(root, "shorts", "demo", "final", "cover.txt"), "nope", "utf-8");
+
+    const ok = await app.request("http://localhost/api/v1/project/files/shorts/demo/final/cover.png");
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toContain("image/png");
+    expect(Buffer.from(await ok.arrayBuffer()).toString("utf-8")).toBe("fake-png");
+
+    const unsupported = await app.request("http://localhost/api/v1/project/files/shorts/demo/final/cover.txt");
+    expect(unsupported.status).toBe(415);
+
+    const traversal = await app.request("http://localhost/api/v1/project/files/../inkos.json");
+    expect([400, 404]).toContain(traversal.status);
+  });
+
   it("rejects create requests when a complete book with the same id already exists", async () => {
     await mkdir(join(root, "books", "existing-book", "story"), { recursive: true });
     await writeFile(join(root, "books", "existing-book", "book.json"), JSON.stringify({ id: "existing-book" }), "utf-8");

@@ -42,12 +42,22 @@ export function resolveToolLabel(tool: string, agent?: string): string {
 }
 
 export function summarizeResult(result: unknown): string {
-  if (typeof result === "string") return result.slice(0, 200);
+  if (typeof result === "string") return result.slice(0, 2000);
   if (result && typeof result === "object") {
     const record = result as Record<string, unknown>;
-    if (typeof record.content === "string") return record.content.slice(0, 200);
+    if (typeof record.content === "string") return record.content.slice(0, 2000);
+    if (Array.isArray(record.content)) {
+      const text = record.content
+        .map((part) => {
+          const item = part as { type?: unknown; text?: unknown };
+          return item.type === "text" && typeof item.text === "string" ? item.text : "";
+        })
+        .filter(Boolean)
+        .join("\n");
+      if (text.trim()) return text.slice(0, 2000);
+    }
   }
-  return String(result).slice(0, 200);
+  return String(result).slice(0, 2000);
 }
 
 export function extractToolError(result: unknown): string {
