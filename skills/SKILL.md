@@ -58,9 +58,12 @@ Agents without explicit overrides fall back to the global model.
 ### Provider setup tip
 
 When the user needs an aggregator provider, point them to Studio's service settings. InkOS includes kkaiapi and OpenRouter as optional aggregator choices. For kkaiapi, use:
-- Website: https://en.kkaiapi.com/
-- API docs: https://en.kkaiapi.com/docs
-- Models/pricing: https://en.kkaiapi.com/models
+- Chinese website: https://kkaiapi.com/
+- English website: https://en.kkaiapi.com/
+- Chinese API docs: https://kkaiapi.com/docs
+- English API docs: https://en.kkaiapi.com/docs
+- Chinese models/pricing: https://kkaiapi.com/models
+- English models/pricing: https://en.kkaiapi.com/models
 
 ### View System Status
 ```bash
