@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUp, Loader2, Sparkles } from "lucide-react";
-import { postApi } from "../hooks/use-api";
+import { fetchJson, postApi } from "../hooks/use-api";
 
 interface PlayStepResponse {
   readonly worldId: string;
@@ -9,23 +9,35 @@ interface PlayStepResponse {
   readonly suggestedActions: ReadonlyArray<string>;
 }
 
+interface PlayRunResponse {
+  readonly worldId: string;
+  readonly runId: string;
+  readonly transcript: ReadonlyArray<{
+    readonly role: "user" | "assistant" | "system" | "tool";
+    readonly content: string;
+    readonly timestamp?: number;
+  }>;
+}
+
 interface PlayTurn {
   readonly role: "user" | "assistant";
   readonly content: string;
   readonly suggestions?: ReadonlyArray<string>;
 }
 
+const INITIAL_PLAY_TURNS: PlayTurn[] = [
+  {
+    role: "assistant",
+    content: "这是一个独立互动入口。输入你要做的动作，系统会按世界状态推进，并给出可选动作；你也可以完全自由输入。",
+    suggestions: ["观察周围", "和面前的人说话", "检查身上的物品"],
+  },
+];
+
 export function PlayPage() {
   const [worldId, setWorldId] = useState("demo-world");
   const [runId, setRunId] = useState("main");
   const [input, setInput] = useState("");
-  const [turns, setTurns] = useState<PlayTurn[]>([
-    {
-      role: "assistant",
-      content: "这是一个独立互动入口。输入你要做的动作，系统会按世界状态推进，并给出可选动作；你也可以完全自由输入。",
-      suggestions: ["观察周围", "和面前的人说话", "检查身上的物品"],
-    },
-  ]);
+  const [turns, setTurns] = useState<PlayTurn[]>(INITIAL_PLAY_TURNS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +45,38 @@ export function PlayPage() {
     () => Boolean(worldId.trim() && runId.trim() && input.trim()) && !loading,
     [input, loading, runId, worldId],
   );
+
+  useEffect(() => {
+    const trimmedWorldId = worldId.trim();
+    const trimmedRunId = runId.trim();
+    if (!trimmedWorldId || !trimmedRunId) return;
+
+    let cancelled = false;
+    const loadRun = async () => {
+      try {
+        const result = await fetchJson<PlayRunResponse>(
+          `/play/runs/${encodeURIComponent(trimmedWorldId)}/${encodeURIComponent(trimmedRunId)}`,
+        );
+        if (cancelled) return;
+        const restoredTurns = result.transcript
+          .filter((turn): turn is PlayTurn => turn.role === "user" || turn.role === "assistant")
+          .map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+          }));
+        setTurns(restoredTurns.length > 0 ? restoredTurns : INITIAL_PLAY_TURNS);
+      } catch {
+        if (!cancelled) {
+          setTurns(INITIAL_PLAY_TURNS);
+        }
+      }
+    };
+
+    void loadRun();
+    return () => {
+      cancelled = true;
+    };
+  }, [runId, worldId]);
 
   const send = async (text: string) => {
     const trimmed = text.trim();

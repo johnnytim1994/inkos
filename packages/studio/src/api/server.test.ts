@@ -226,6 +226,7 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     resolveSessionActiveBook: resolveSessionActiveBookMock,
     runAgentSession: runAgentSessionMock,
     PlayRunner: MockPlayRunner,
+    PlayStore: actual.PlayStore,
     buildAgentSystemPrompt: vi.fn(() => "You are helpful."),
     listAvailableGenres: actual.listAvailableGenres,
     readGenreProfile: actual.readGenreProfile,
@@ -3228,5 +3229,38 @@ describe("createStudioServer daemon lifecycle", () => {
     });
     expect(playRunnerCtorArgs).toHaveLength(1);
     expect(playRunnerStepMock).toHaveBeenCalledWith("我假装看天气，顺手点开车机导航记录");
+  });
+
+  it("loads an existing Play run transcript for Studio refresh", async () => {
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+    const runDir = join(root, "worlds", "betrayal-car", "runs", "run-1");
+    await mkdir(join(runDir, "state"), { recursive: true });
+    await writeFile(
+      join(runDir, "transcript.jsonl"),
+      [
+        JSON.stringify({ role: "user", content: "查看导航记录", timestamp: 1 }),
+        JSON.stringify({ role: "assistant", content: "车机弹出新城花园 187 次。", timestamp: 2 }),
+      ].join("\n") + "\n",
+      "utf-8",
+    );
+    await writeFile(
+      join(runDir, "state", "current.json"),
+      JSON.stringify({ turn: 1, lastEventId: "evt-1" }),
+      "utf-8",
+    );
+
+    const response = await app.request("http://localhost/api/v1/play/runs/betrayal-car/run-1");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      worldId: "betrayal-car",
+      runId: "run-1",
+      transcript: [
+        { role: "user", content: "查看导航记录", timestamp: 1 },
+        { role: "assistant", content: "车机弹出新城花园 187 次。", timestamp: 2 },
+      ],
+      currentState: { turn: 1, lastEventId: "evt-1" },
+    });
   });
 });

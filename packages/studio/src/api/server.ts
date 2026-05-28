@@ -39,6 +39,7 @@ import {
   GLOBAL_ENV_PATH,
   COVER_PROVIDER_PRESETS,
   PlayRunner,
+  PlayStore,
   Scheduler,
   coverSecretKey,
   resolveCoverProviderPreset,
@@ -2314,6 +2315,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
       suggestedActions: result.suggestedActions,
       action: result.action,
       mutation: result.mutation,
+    });
+  });
+
+  app.get("/api/v1/play/runs/:worldId/:runId", async (c) => {
+    const worldId = normalizeApiBookId(c.req.param("worldId"), "worldId") ?? "default-world";
+    const runId = normalizeApiBookId(c.req.param("runId"), "runId") ?? "default-run";
+    const store = new PlayStore(root);
+    const [transcript, currentState] = await Promise.all([
+      store.readTranscript(worldId, runId),
+      store.loadCurrentState(worldId, runId).catch(() => null),
+    ]);
+    return c.json({
+      worldId,
+      runId,
+      transcript,
+      currentState,
     });
   });
 

@@ -24,6 +24,7 @@ import {
 import {
   TOOL_RESULT_BRIDGE_TEXT,
   adaptRestoredAgentMessagesForModel,
+  appendRestoredHistoryBoundary,
   restoreAgentMessagesFromTranscript,
 } from "../interaction/session-transcript-restore.js";
 import type { TranscriptEvent, TranscriptRole } from "../interaction/session-transcript-schema.js";
@@ -558,9 +559,12 @@ async function runAgentSessionUnlocked(
   }
 
   if (!cached) {
-    const restoredMessages = adaptRestoredAgentMessagesForModel(
-      await restoreAgentMessagesFromTranscript(projectRoot, sessionId),
-      model,
+    const restoredMessages = appendRestoredHistoryBoundary(
+      adaptRestoredAgentMessagesForModel(
+        await restoreAgentMessagesFromTranscript(projectRoot, sessionId),
+        model,
+      ),
+      language,
     );
     const initialAgentMessages = restoredMessages.length > 0
       ? restoredMessages

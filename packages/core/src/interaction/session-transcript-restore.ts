@@ -69,6 +69,14 @@ const emptyUsage = {
 };
 
 export const TOOL_RESULT_BRIDGE_TEXT = "I have processed the tool results.";
+const RESTORED_HISTORY_BOUNDARY_ZH =
+  "[已完成的历史上下文]\n" +
+  "以上是已经完成并提交的历史上下文，只能用于回忆，不代表当前轮已经执行了动作。\n" +
+  "当前轮必须优先遵循用户接下来输入的最新指令；如果最新输入是提问、讨论或确认，直接回答，不要因为历史工具结果跳过判断或继续执行旧动作。";
+const RESTORED_HISTORY_BOUNDARY_EN =
+  "[Completed history context]\n" +
+  "The messages above are completed and committed history. Use them only as memory; they do not mean any action has already run in the current turn.\n" +
+  "For the current turn, prioritize the next user instruction. If it is a question, discussion, or confirmation, answer directly instead of continuing an old tool action.";
 
 function toolResultBridgeMessage(timestamp: number): AgentMessage {
   return {
@@ -100,6 +108,27 @@ function addToolResultBridges(messages: AgentMessage[]): AgentMessage[] {
   }
 
   return bridged;
+}
+
+export function appendRestoredHistoryBoundary(
+  messages: AgentMessage[],
+  language: string,
+): AgentMessage[] {
+  if (messages.length === 0) return messages;
+  const timestamp = messages.reduce((max, message) => {
+    if (isObject(message) && typeof message.timestamp === "number") {
+      return Math.max(max, message.timestamp);
+    }
+    return max;
+  }, 0) || Date.now();
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: language === "zh" ? RESTORED_HISTORY_BOUNDARY_ZH : RESTORED_HISTORY_BOUNDARY_EN,
+      timestamp: timestamp + 1,
+    } as AgentMessage,
+  ];
 }
 
 export function cleanRestoredAgentMessages(messages: AgentMessage[]): AgentMessage[] {
