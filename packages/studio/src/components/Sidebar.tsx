@@ -247,46 +247,44 @@ export function Sidebar({ nav, activePage, sse, t }: {
 
       {/* Main Navigation */}
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-6">
+        {/* Books Section */}
         <div>
           <div className="px-3 mb-3">
             <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">
-              创作入口
+              创作
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+
+          <div className="mb-4 space-y-1">
+            <button
+              type="button"
+              onClick={nav.toBookCreate}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-all ${
+                activePage === "book-create"
+                  ? "border border-border bg-secondary text-foreground font-medium shadow-sm"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              }`}
+            >
+              <Plus size={16} className={activePage === "book-create" ? "text-primary" : "text-muted-foreground"} />
+              <span className="flex-1">{t("nav.newBook")}</span>
+            </button>
             <button
               type="button"
               onClick={() => launchProjectMode("short")}
-              className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-left transition-all hover:border-amber-500/40 hover:bg-amber-500/15"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-all hover:bg-secondary/50 hover:text-foreground"
             >
-              <ScrollText size={16} className="mb-2 text-amber-600 dark:text-amber-300" />
-              <div className="text-xs font-semibold text-foreground">Short</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">短篇生产</div>
+              <ScrollText size={16} className="text-muted-foreground" />
+              <span className="flex-1">InkOS Short</span>
+              <span className="text-[10px] text-muted-foreground/60">短篇</span>
             </button>
             <button
               type="button"
               onClick={() => launchProjectMode("play")}
-              className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-3 text-left transition-all hover:border-sky-500/40 hover:bg-sky-500/15"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-all hover:bg-secondary/50 hover:text-foreground"
             >
-              <Gamepad2 size={16} className="mb-2 text-sky-600 dark:text-sky-300" />
-              <div className="text-xs font-semibold text-foreground">Play</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">互动世界</div>
-            </button>
-          </div>
-        </div>
-
-        {/* Books Section */}
-        <div>
-          <div className="px-3 mb-3 flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">
-              {t("nav.books")}
-            </span>
-            <button
-              onClick={nav.toBookCreate}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-            >
-              <Plus size={12} />
-              <span>{t("nav.newBook")}</span>
+              <Gamepad2 size={16} className="text-muted-foreground" />
+              <span className="flex-1">InkOS Play</span>
+              <span className="text-[10px] text-muted-foreground/60">互动</span>
             </button>
           </div>
 

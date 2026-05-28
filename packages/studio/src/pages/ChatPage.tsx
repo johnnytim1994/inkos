@@ -25,9 +25,6 @@ import {
   ArrowUp,
   ChevronDown,
   Check,
-  Gamepad2,
-  ScrollText,
-  Sparkles,
 } from "lucide-react";
 import { Shimmer } from "../components/ai-elements/shimmer";
 import {
@@ -83,7 +80,6 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const loadSessionList = useChatStore((s) => s.loadSessionList);
   const createSession = useChatStore((s) => s.createSession);
-  const createDraftSession = useChatStore((s) => s.createDraftSession);
   const loadSessionDetail = useChatStore((s) => s.loadSessionDetail);
   const activateSession = useChatStore((s) => s.activateSession);
 
@@ -271,16 +267,6 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
     void sendMessage(activeSessionId, text, activeBookId);
   };
 
-  const launchProjectMode = (kind: "short" | "play") => {
-    const sessionId = createDraftSession(null);
-    setProjectChatSessionId(sessionId);
-    activateSession(sessionId);
-    setInput(kind === "short"
-      ? "我要做一篇 InkOS Short 短篇，方向是："
-      : "开一个 InkOS Play 互动世界，我扮演：");
-    window.setTimeout(() => textareaRef.current?.focus(), 0);
-  };
-
   const handleQuickAction = (command: string) => {
     if (!activeSessionId) return;
     void sendMessage(activeSessionId, command, activeBookId);
@@ -297,16 +283,8 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
         ref={scrollRef}
         className="chat-message-scroll flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 py-6"
       >
-        {mode === "project-chat" && (
-          <ModeLauncher
-            isZh={isZh}
-            disabled={loading}
-            onShort={() => launchProjectMode("short")}
-            onPlay={() => launchProjectMode("play")}
-          />
-        )}
         {messages.length === 0 && !loading ? (
-          <div className="flex min-h-[52vh] flex-col items-center justify-center text-center select-none">
+          <div className="h-full flex flex-col items-center justify-center text-center select-none">
             <div className="w-14 h-14 rounded-2xl border border-dashed border-border flex items-center justify-center mb-4 bg-secondary/30 opacity-40">
               <BotMessageSquare size={24} className="text-muted-foreground" />
             </div>
@@ -471,70 +449,6 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
             </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ModeLauncher({
-  isZh,
-  disabled,
-  onShort,
-  onPlay,
-}: {
-  readonly isZh: boolean;
-  readonly disabled: boolean;
-  readonly onShort: () => void;
-  readonly onPlay: () => void;
-}) {
-  return (
-    <div className="mx-auto mb-5 grid w-full max-w-3xl gap-3 md:grid-cols-2">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onShort}
-        className="group relative overflow-hidden rounded-2xl border border-amber-500/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.14),rgba(120,53,15,0.04))] p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/35 disabled:opacity-50 disabled:hover:translate-y-0"
-      >
-        <div className="absolute right-4 top-4 h-14 w-14 rounded-full bg-amber-400/10 blur-xl transition-transform group-hover:scale-125" />
-        <div className="relative flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
-            <ScrollText size={19} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-serif text-lg font-semibold">InkOS Short</span>
-              <Sparkles size={13} className="text-amber-500" />
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {isZh ? "直接开一条短篇生产对话：方向、大纲、正文、简介和封面。" : "Start a short-fiction production thread."}
-            </p>
-          </div>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onPlay}
-        className="group relative overflow-hidden rounded-2xl border border-sky-500/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.13),rgba(15,23,42,0.05))] p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-500/35 disabled:opacity-50 disabled:hover:translate-y-0"
-      >
-        <div className="absolute right-4 top-4 h-14 w-14 rounded-full bg-sky-400/10 blur-xl transition-transform group-hover:scale-125" />
-        <div className="relative flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-300">
-            <Gamepad2 size={19} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-serif text-lg font-semibold">InkOS Play</span>
-              <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-600 dark:text-sky-300">
-                {isZh ? "互动" : "Play"}
-              </span>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {isZh ? "开一条互动世界对话：你输入动作，系统推进场景和状态。" : "Start an interactive world thread."}
-            </p>
-          </div>
-        </div>
-      </button>
     </div>
   );
 }
