@@ -217,6 +217,7 @@ vi.mock("@actalk/inkos-core", async (importOriginal) => {
     computeAnalytics: vi.fn(() => ({})),
     isSafeBookId: actual.isSafeBookId,
     normalizePlatformOrOther: actual.normalizePlatformOrOther,
+    defaultChapterLength: actual.defaultChapterLength,
     chatCompletion: chatCompletionMock,
     loadProjectConfig: loadProjectConfigMock,
     processProjectInteractionInput: processProjectInteractionInputMock,
