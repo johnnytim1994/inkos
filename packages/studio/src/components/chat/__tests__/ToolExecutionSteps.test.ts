@@ -185,6 +185,7 @@ describe("groupChronologically", () => {
 
     expect(getProposedActionDetails(exec)).toMatchObject({
       kind: "proposed_action",
+      execId: "proposal-1",
       action: "short_run",
       targetSessionKind: "short",
       sameSession: true,

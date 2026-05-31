@@ -158,6 +158,10 @@ export interface CreateState {
   artifactFile: string | null;         // foundation file name, e.g. "story_bible.md"
   artifactChapter: number | null;      // chapter number, e.g. 1
   bookSummary: BookSummary | null;
+  // Proposed-action cards (propose_action) are one-shot: once confirmed or
+  // rejected, the card locks so the user can't re-fire the production action.
+  // Keyed by the proposal's ToolExecution id.
+  resolvedProposals: Record<string, "confirmed" | "rejected">;
 }
 
 export type ChatState = MessageState & CreateState;
@@ -190,6 +194,7 @@ export interface CreateActions {
   openChapterArtifact: (chapterNum: number) => void;
   closeArtifact: () => void;
   setBookSummary: (summary: BookSummary | null) => void;
+  markProposalResolved: (execId: string, resolution: "confirmed" | "rejected") => void;
 }
 
 // -- Composed store type --

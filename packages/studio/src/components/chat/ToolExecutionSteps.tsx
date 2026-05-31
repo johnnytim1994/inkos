@@ -11,8 +11,10 @@ import {
   XCircle,
   ChevronDown,
   Wrench,
+  Check,
 } from "lucide-react";
 import { buildApiUrl } from "../../hooks/use-api";
+import { chatSelectors, useChatStore } from "../../store/chat";
 
 // -- Status rendering helpers --
 
@@ -110,6 +112,7 @@ export interface PlayToolDetails {
 
 export interface ProposedActionDetails {
   readonly kind: "proposed_action";
+  readonly execId: string;
   readonly action: ChatRequestedIntent;
   readonly targetSessionKind: ChatSessionKind;
   readonly sameSession?: boolean;
@@ -207,6 +210,7 @@ export function getProposedActionDetails(exec: ToolExecution): ProposedActionDet
   if (!action || !targetSessionKind || !instruction) return null;
   return {
     kind: "proposed_action",
+    execId: exec.id,
     action,
     targetSessionKind,
     sameSession: booleanField(record, "sameSession"),
@@ -225,9 +229,17 @@ function ProposedActionPreview({
   onProposedAction?: (details: ProposedActionDetails) => void;
   onRejectProposedAction?: (details: ProposedActionDetails) => void;
 }) {
+  const resolvedProposals = useChatStore((s) => s.resolvedProposals);
+  const isActiveSessionStreaming = useChatStore(chatSelectors.isActiveSessionStreaming);
   if (exec.tool !== "propose_action" || exec.status !== "completed") return null;
   const details = getProposedActionDetails(exec);
   if (!details) return null;
+  // A proposed action is one-shot: once confirmed or rejected the card locks so
+  // the production action can't be re-fired. While a run is in flight the
+  // confirm button reflects "执行中…" instead of silently swallowing the click.
+  const resolution = resolvedProposals[details.execId];
+  const streaming = isActiveSessionStreaming;
+  const locked = resolution !== undefined;
   return (
     <div className="mx-3 mb-3 mt-1 rounded-xl border border-primary/25 bg-primary/5 px-3 py-3">
       <div className="text-sm font-semibold text-foreground">{details.title ?? "确认执行"}</div>
@@ -237,24 +249,33 @@ function ProposedActionPreview({
       <div className="mt-2 rounded-lg bg-background/70 px-2.5 py-2 text-xs leading-5 text-muted-foreground">
         {details.instruction}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => onProposedAction?.(details)}
-          disabled={!onProposedAction}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-        >
-          继续执行
-        </button>
-        <button
-          type="button"
-          onClick={() => onRejectProposedAction?.(details)}
-          disabled={!onRejectProposedAction}
-          className="rounded-lg border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium text-muted-foreground disabled:opacity-50"
-        >
-          取消
-        </button>
-      </div>
+      {resolution === "confirmed" ? (
+        <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary">
+          <Check size={13} className="shrink-0" />
+          已执行
+        </div>
+      ) : resolution === "rejected" ? (
+        <div className="mt-3 text-xs font-medium text-muted-foreground">已取消</div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onProposedAction?.(details)}
+            disabled={!onProposedAction || streaming || locked}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {streaming ? "执行中…" : "继续执行"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onRejectProposedAction?.(details)}
+            disabled={!onRejectProposedAction || streaming || locked}
+            className="rounded-lg border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium text-muted-foreground disabled:opacity-50"
+          >
+            取消
+          </button>
+        </div>
+      )}
     </div>
   );
 }

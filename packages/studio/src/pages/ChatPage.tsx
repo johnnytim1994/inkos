@@ -86,6 +86,7 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const loadSessionList = useChatStore((s) => s.loadSessionList);
   const createSession = useChatStore((s) => s.createSession);
+  const markProposalResolved = useChatStore((s) => s.markProposalResolved);
   const loadSessionDetail = useChatStore((s) => s.loadSessionDetail);
   const activateSession = useChatStore((s) => s.activateSession);
   const setSessionPlayMode = useChatStore((s) => s.setSessionPlayMode);
@@ -310,6 +311,8 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
   };
 
   const handleProposedAction = async (details: ProposedActionDetails) => {
+    // Lock the proposal card so the production action can't be re-fired.
+    markProposalResolved(details.execId, "confirmed");
     if (details.sameSession && activeSessionId) {
       await sendMessage(activeSessionId, details.instruction ?? "", {
         activeBookId,
@@ -328,6 +331,7 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
   };
 
   const handleRejectProposedAction = async (details: ProposedActionDetails) => {
+    markProposalResolved(details.execId, "rejected");
     if (!activeSessionId) return;
     await sendMessage(activeSessionId, `取消这次操作：${details.title ?? details.instruction}`, {
       activeBookId,
