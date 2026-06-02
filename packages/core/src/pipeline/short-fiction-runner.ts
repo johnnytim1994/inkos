@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { AgentContext } from "../agents/base.js";
 import {
@@ -91,6 +91,36 @@ export async function runShortFictionProduction(
   options: ShortFictionRunOptions,
 ): Promise<ShortFictionRunResult> {
   const root = options.projectRoot;
+  const outDir = normalizeOutputDir(options.outDir ?? "shorts");
+  const providedStoryId = options.storyId ? safeSegment(options.storyId) : undefined;
+
+  // A stable storyId lets a re-run resume from disk instead of redoing finished
+  // work — a transient failure in a late stage used to throw the whole short
+  // away (orphaning outline/drafts). If it already finished, return it as-is.
+  if (providedStoryId && await projectFileExists(root, join(outDir, providedStoryId, "final", "full.md"))) {
+    return buildShortRunResult(providedStoryId, join(outDir, providedStoryId), { coverError: "already-complete" });
+  }
+
+  try {
+    return await produceShort(options, root, outDir, providedStoryId);
+  } catch (error) {
+    // Mark the partial output as failed so drafts can't masquerade as a short.
+    if (providedStoryId) {
+      await writeJson(root, join(outDir, providedStoryId, "status.json"), {
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      }).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+async function produceShort(
+  options: ShortFictionRunOptions,
+  root: string,
+  outDir: string,
+  providedStoryId: string | undefined,
+): Promise<ShortFictionRunResult> {
   const chapterCount = boundedInteger(
     options.chapterCount,
     SHORT_FICTION_DEFAULT_CHAPTERS,
@@ -106,45 +136,62 @@ export async function runShortFictionProduction(
     SHORT_FICTION_MAX_CHARS_PER_CHAPTER,
   );
 
-  options.onProgress?.("Creating short fiction outline...");
-  const outlineAgent = new ShortFictionOutlineAgent(options.runtimes.planner);
-  const outlineV1 = await outlineAgent.createOutline({
-    direction: options.direction,
-    chapterCount,
-    charsPerChapter,
-    reference: options.reference,
-  });
+  // Resume the (3-stage) outline from disk if v002 already exists for this id —
+  // the writer + everything downstream only need the outline markdown.
+  const resumedOutline = providedStoryId
+    ? await tryReadProjectText(root, join(outDir, providedStoryId, "outline", "v002.md"))
+    : undefined;
 
-  const storyId = safeSegment(options.storyId || slugify(outlineV1.storyTitle || options.direction));
-  const baseDir = join(normalizeOutputDir(options.outDir ?? "shorts"), storyId);
-  await writeText(root, join(baseDir, "outline", "v001.md"), outlineV1.rawContent);
+  let outlineMarkdown: string;
+  let storyId: string;
+  let baseDir: string;
+  if (providedStoryId && resumedOutline?.trim()) {
+    storyId = providedStoryId;
+    baseDir = join(outDir, storyId);
+    outlineMarkdown = resumedOutline;
+    options.onProgress?.("Resuming from existing outline (skipping outline stages)...");
+  } else {
+    options.onProgress?.("Creating short fiction outline...");
+    const outlineAgent = new ShortFictionOutlineAgent(options.runtimes.planner);
+    const outlineV1 = await outlineAgent.createOutline({
+      direction: options.direction,
+      chapterCount,
+      charsPerChapter,
+      reference: options.reference,
+    });
 
-  options.onProgress?.("Reviewing outline...");
-  const outlineReviewer = new ShortFictionOutlineReviewerAgent(options.runtimes.outlineReview);
-  const outlineReview = await outlineReviewer.reviewOutline({
-    direction: options.direction,
-    outline: outlineV1,
-    reference: options.reference,
-  });
-  await writeText(root, join(baseDir, "reviews", "outline-v001.md"), outlineReview);
+    storyId = providedStoryId ?? safeSegment(slugify(outlineV1.storyTitle || options.direction));
+    baseDir = join(outDir, storyId);
+    await writeText(root, join(baseDir, "outline", "v001.md"), outlineV1.rawContent);
 
-  options.onProgress?.("Revising outline once...");
-  const outlineReviser = new ShortFictionOutlineReviserAgent(options.runtimes.planner);
-  const outlineV2 = await outlineReviser.reviseOutline({
-    direction: options.direction,
-    outline: outlineV1,
-    review: outlineReview,
-    reference: options.reference,
-    chapterCount,
-    charsPerChapter,
-  });
-  await writeText(root, join(baseDir, "outline", "v002.md"), outlineV2.rawContent);
+    options.onProgress?.("Reviewing outline...");
+    const outlineReviewer = new ShortFictionOutlineReviewerAgent(options.runtimes.outlineReview);
+    const outlineReview = await outlineReviewer.reviewOutline({
+      direction: options.direction,
+      outline: outlineV1,
+      reference: options.reference,
+    });
+    await writeText(root, join(baseDir, "reviews", "outline-v001.md"), outlineReview);
+
+    options.onProgress?.("Revising outline once...");
+    const outlineReviser = new ShortFictionOutlineReviserAgent(options.runtimes.planner);
+    const outlineV2 = await outlineReviser.reviseOutline({
+      direction: options.direction,
+      outline: outlineV1,
+      review: outlineReview,
+      reference: options.reference,
+      chapterCount,
+      charsPerChapter,
+    });
+    await writeText(root, join(baseDir, "outline", "v002.md"), outlineV2.rawContent);
+    outlineMarkdown = outlineV2.rawContent;
+  }
 
   options.onProgress?.("Writing full short fiction draft...");
   const writer = new ShortFictionWriterAgent(options.runtimes.writer);
   const draftV1 = await writer.writeDraft({
     direction: options.direction,
-    outlineMarkdown: outlineV2.rawContent,
+    outlineMarkdown,
     chapterCount,
     charsPerChapter,
   });
@@ -154,7 +201,7 @@ export async function runShortFictionProduction(
   const draftReviewer = new ShortFictionDraftReviewerAgent(options.runtimes.draftReview);
   const draftReview = await draftReviewer.reviewDraft({
     direction: options.direction,
-    outlineMarkdown: outlineV2.rawContent,
+    outlineMarkdown,
     draft: draftV1,
     chapterCount,
     charsPerChapter,
@@ -165,7 +212,7 @@ export async function runShortFictionProduction(
   const reviser = new ShortFictionDraftReviserAgent(options.runtimes.revise);
   const draftV2 = await reviser.reviseDraft({
     direction: options.direction,
-    outlineMarkdown: outlineV2.rawContent,
+    outlineMarkdown,
     draft: draftV1,
     review: draftReview,
     chapterCount,
@@ -179,7 +226,7 @@ export async function runShortFictionProduction(
   const packager = new ShortFictionPackagingAgent(options.runtimes.package);
   const salesPackage = await packager.generatePackage({
     direction: options.direction,
-    outlineMarkdown: outlineV2.rawContent,
+    outlineMarkdown,
     draft: draftV2,
   });
   await writePackageArtifacts(root, baseDir, salesPackage);
@@ -197,6 +244,14 @@ export async function runShortFictionProduction(
         coverApiKeyEnv: options.coverApiKeyEnv,
       }).catch((error: unknown) => ({ coverError: String(error) }));
 
+  return buildShortRunResult(storyId, baseDir, coverArtifacts);
+}
+
+function buildShortRunResult(
+  storyId: string,
+  baseDir: string,
+  coverArtifacts: { readonly coverImagePath?: string; readonly coverError?: string },
+): ShortFictionRunResult {
   return {
     storyId,
     outlinePath: projectPath(join(baseDir, "outline", "v002.md")),
@@ -209,6 +264,23 @@ export async function runShortFictionProduction(
     coverImagePath: coverArtifacts.coverImagePath,
     coverError: coverArtifacts.coverError,
   };
+}
+
+async function projectFileExists(root: string, path: string): Promise<boolean> {
+  try {
+    await access(safeChildPath(root, path));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function tryReadProjectText(root: string, path: string): Promise<string | undefined> {
+  try {
+    return await readFile(safeChildPath(root, path), "utf-8");
+  } catch {
+    return undefined;
+  }
 }
 
 export async function generateShortFictionCover(
