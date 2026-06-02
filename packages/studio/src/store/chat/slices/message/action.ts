@@ -25,9 +25,11 @@ export const createMessageSlice: StateCreator<ChatStore, [], [], MessageActions>
     set({ activeSessionId: sessionId }),
 
   setSessionPlayMode: (sessionId, playMode) => {
+    const session = get().sessions[sessionId];
     set((state) => ({
       sessions: updateSession(state.sessions, sessionId, () => ({ playMode })),
     }));
+    if (session?.isDraft) return;
     void fetchJson(`/sessions/${sessionId}/play-mode`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -388,6 +390,30 @@ export const createMessageSlice: StateCreator<ChatStore, [], [], MessageActions>
 
       const finalContent = data.details?.draftRaw || data.response || "";
       const toolCall = data.details?.toolCall ?? undefined;
+      const responseBookId = data.session?.activeBookId ?? data.session?.bookId;
+      const responseSessionKind = data.session?.sessionKind;
+      if (responseBookId || responseSessionKind || data.session?.title || data.session?.playMode) {
+        set((state) => {
+          const runtime = state.sessions[sessionId];
+          if (!runtime) return {};
+          const nextBookId = responseBookId ?? runtime.bookId;
+          return {
+            sessions: updateSession(state.sessions, sessionId, () => ({
+              bookId: nextBookId,
+              sessionKind: responseSessionKind ?? runtime.sessionKind,
+              playMode: data.session?.playMode ?? runtime.playMode,
+              title: data.session?.title ?? runtime.title,
+            })),
+            sessionIdsByBook: {
+              ...state.sessionIdsByBook,
+              [bookKey(nextBookId)]: mergeSessionIds(
+                state.sessionIdsByBook[bookKey(nextBookId)],
+                [sessionId],
+              ),
+            },
+          };
+        });
+      }
       const hasStream = Boolean(
         get().sessions[sessionId]?.messages.some((message) => message.timestamp === streamTs),
       );

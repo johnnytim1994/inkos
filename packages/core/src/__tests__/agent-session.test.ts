@@ -146,6 +146,7 @@ import {
   readTranscriptEvents,
 } from "../interaction/session-transcript.js";
 import { restoreAgentMessagesFromTranscript } from "../interaction/session-transcript-restore.js";
+import { PlayStore } from "../play/play-store.js";
 
 describe("runAgentSession cache — bookId switch", () => {
   let projectRoot: string;
@@ -183,6 +184,7 @@ describe("runAgentSession cache — bookId switch", () => {
     evictAgentCache("short-confirmed-session");
     evictAgentCache("cover-confirmed-session");
     evictAgentCache("play-session");
+    evictAgentCache("play-active-session");
     evictAgentCache("play-confirmed-session");
     await rm(projectRoot, { recursive: true, force: true });
     if (otherProjectRoot) await rm(otherProjectRoot, { recursive: true, force: true });
@@ -570,6 +572,25 @@ describe("runAgentSession cache — bookId switch", () => {
     );
     expect(agentInstances[1].state.tools.map((tool: any) => tool.name)).toEqual([
       "propose_action",
+    ]);
+  });
+
+  it("exposes play_step only after the play world exists for this session", async () => {
+    const model = { provider: "x", id: "y", api: "anthropic-messages" } as any;
+    const pipeline = {} as any;
+    await new PlayStore(projectRoot).createWorld({
+      id: "play-active-session",
+      title: "雨巷账本",
+      premise: "玩家在雨巷里查一笔旧账。",
+      mode: "guided",
+    });
+
+    await runAgentSession(
+      { sessionId: "play-active-session", bookId: null, sessionKind: "play", language: "zh", pipeline, projectRoot, model },
+      "我查看门缝下的账本",
+    );
+
+    expect(agentInstances[0].state.tools.map((tool: any) => tool.name)).toEqual([
       "play_step",
     ]);
   });

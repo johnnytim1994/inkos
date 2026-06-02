@@ -44,6 +44,7 @@ import {
 import type { TranscriptEvent, TranscriptRole } from "../interaction/session-transcript-schema.js";
 import type { SessionKind } from "../interaction/session.js";
 import { assertSafeBookId } from "../utils/book-id.js";
+import { PlayStore } from "../play/play-store.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,6 +107,7 @@ interface CachedAgent {
   sessionKind: SessionKind;
   actionSource: NonNullable<AgentSessionConfig["actionSource"]>;
   requestedIntent: AgentSessionConfig["requestedIntent"];
+  playWorldExists: boolean;
   language: string;
   modelIdentity: string;
   apiKey: string | undefined;
@@ -543,6 +545,7 @@ function createAgentToolsForMode(params: {
   readonly allowSystemFileRead: boolean;
   readonly language: string;
   readonly playMode?: "open" | "guided";
+  readonly playWorldExists: boolean;
 }) {
   const subAgentTool = createSubAgentTool(params.pipeline, params.bookId, params.projectRoot);
   const lang = params.language === "en" ? "en" : "zh";
@@ -572,10 +575,10 @@ function createAgentToolsForMode(params: {
     if (isConfirmed("play_start")) {
       return [createPlayStartTool(params.projectRoot, params.sessionId, params.playMode)];
     }
-    return [
-      proposalTool,
-      createPlayStepTool(params.pipeline, params.projectRoot, params.sessionId),
-    ];
+    if (params.playWorldExists) {
+      return [createPlayStepTool(params.pipeline, params.projectRoot, params.sessionId)];
+    }
+    return [proposalTool];
   }
 
   if (params.sessionKind === "book-create" && !params.bookId) {
@@ -643,6 +646,9 @@ async function runAgentSessionUnlocked(
   const model = resolveModel(config.model);
   const requestedModelIdentity = agentModelIdentity(model);
   const allowSystemFileRead = config.allowSystemFileRead ?? envFlagEnabled(process.env.INKOS_AGENT_ALLOW_SYSTEM_READ, false);
+  const playWorldExists = sessionKind === "play"
+    ? Boolean(await new PlayStore(projectRoot).loadWorld(sessionId))
+    : false;
   const cacheKey = agentCacheKey(projectRoot, sessionId);
 
   // ----- Resolve or create Agent -----
@@ -664,6 +670,7 @@ async function runAgentSessionUnlocked(
     const languageChanged = cached.language !== language;
     const apiKeyChanged = cached.apiKey !== config.apiKey;
     const readPermissionChanged = cached.allowSystemFileRead !== allowSystemFileRead;
+    const playWorldChanged = cached.playWorldExists !== playWorldExists;
     const transcriptChanged = cached.lastCommittedSeq !== currentCommittedSeq;
 
     if (
@@ -676,6 +683,7 @@ async function runAgentSessionUnlocked(
       languageChanged ||
       apiKeyChanged ||
       readPermissionChanged ||
+      playWorldChanged ||
       transcriptChanged
     ) {
       agentCache.delete(cacheKey);
@@ -711,6 +719,7 @@ async function runAgentSessionUnlocked(
           allowSystemFileRead,
           language,
           playMode,
+          playWorldExists,
         }),
         messages: initialAgentMessages,
       },
@@ -731,6 +740,7 @@ async function runAgentSessionUnlocked(
       sessionKind,
       actionSource,
       requestedIntent,
+      playWorldExists,
       language,
       modelIdentity: requestedModelIdentity,
       apiKey: config.apiKey,

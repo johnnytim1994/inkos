@@ -79,6 +79,12 @@ function formatValue(value: unknown): string {
   }
 }
 
+function isHeldEntity(entity: PlayEntity): boolean {
+  if (!HOLDING_TYPES.has(entity.type)) return false;
+  const text = `${entity.status ?? ""} ${entity.summary ?? ""}`.toLowerCase();
+  return /已收起|收起|拿着|握着|带在身上|随身|携带|持有|已获得|已拿到|收入|背包|物品栏|held|holding|carried|collected|obtained|in inventory/.test(text);
+}
+
 interface HudDetail {
   readonly label?: string;
   readonly text: string;
@@ -106,7 +112,7 @@ interface HudView {
   readonly meters: ReadonlyArray<HudRow>;
 }
 
-function buildView(run: PlayRunResponse | null): HudView | null {
+export function buildView(run: PlayRunResponse | null): HudView | null {
   if (!run?.graph) return null;
   const { entities, edges, stateSlots, events } = run.graph;
   const labelOf = new Map(entities.map((e) => [e.id, e.label]));
@@ -138,8 +144,18 @@ function buildView(run: PlayRunResponse | null): HudView | null {
       details: [...summaryDetail(e), ...relationDetails(e.id)],
       imageUrl: e.imageUrl,
     }));
+  const surroundings: HudRow[] = entities
+    .filter((e) => HOLDING_TYPES.has(e.type) && !isHeldEntity(e))
+    .map((e) => ({
+      id: e.id,
+      glyph: HOLDING_GLYPH[e.type] ?? "•",
+      label: e.label,
+      note: e.status ?? null,
+      details: summaryDetail(e),
+      imageUrl: e.imageUrl,
+    }));
   const holdings: HudRow[] = entities
-    .filter((e) => HOLDING_TYPES.has(e.type))
+    .filter(isHeldEntity)
     .map((e) => ({
       id: e.id,
       glyph: HOLDING_GLYPH[e.type] ?? "•",
@@ -165,7 +181,7 @@ function buildView(run: PlayRunResponse | null): HudView | null {
     turn: run.currentState?.turn ?? (events.length > 0 ? turnFromEvents : null),
     mode: run.currentState?.mode ?? null,
     premise: run.currentState?.premise ?? "",
-    facing: [...locations, ...actors],
+    facing: [...locations, ...actors, ...surroundings],
     actors,
     holdings,
     meters,
