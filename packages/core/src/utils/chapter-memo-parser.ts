@@ -119,6 +119,17 @@ function extractMemoBody(markdown: string): string {
   return markdown.slice(Math.min(...starts)).trim();
 }
 
+function makeDisplayGoal(goal: string): string {
+  if (goal.length <= 50) return goal;
+  return `${goal.slice(0, 47).trimEnd()}...`;
+}
+
+function prependFullGoalIfNeeded(markdown: string, body: string, fullGoal: string, displayGoal: string): string {
+  if (fullGoal === displayGoal) return body;
+  const heading = markdown.includes("## Chapter goal") ? "## Chapter goal" : "## 本章目标";
+  return `${heading}\n${fullGoal}\n\n${body}`;
+}
+
 /**
  * Parse a planner memo produced by the LLM.
  *
@@ -126,9 +137,10 @@ function extractMemoBody(markdown: string): string {
  * section, an optional thread-ref section, and the required memo section
  * headings.
  *
- * Strict on the LLM-owned fields (goal non-empty and ≤ 50 chars, required
- * section headings present). Caller-owned fields (chapter / golden-opening)
- * come from the host, not from the model.
+ * Strict on the LLM-owned memo sections. Caller-owned fields (chapter /
+ * golden-opening) come from the host, not from the model. A long chapter goal
+ * is kept in the memo body and reduced only to a short display label for the
+ * schema field, so parser robustness does not silently delete planning intent.
  *
  * The parser strips a wrapping Markdown code fence and any leading assistant
  * prose ("好的，下面是...") before the first memo heading. It does not accept
@@ -147,11 +159,7 @@ export function parseMemo(
   if (goal.length === 0) {
     throw new PlannerParseError("goal must be a non-empty string");
   }
-  if (goal.length > 50) {
-    throw new PlannerParseError(
-      `goal too long: ${goal.length} chars (max 50)`,
-    );
-  }
+  const displayGoal = makeDisplayGoal(goal);
 
   const missing = REQUIRED_SECTIONS.filter(
     (section) => !body.includes(section.zh) && !body.includes(section.en),
@@ -182,9 +190,9 @@ export function parseMemo(
 
   return ChapterMemoSchema.parse({
     chapter: expectedChapter,
-    goal,
+    goal: displayGoal,
     isGoldenOpening,
-    body,
+    body: prependFullGoalIfNeeded(markdown, body, goal, displayGoal),
     threadRefs,
   });
 }

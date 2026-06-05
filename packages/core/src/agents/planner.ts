@@ -64,9 +64,9 @@ const MEMO_RETRY_LIMIT = 3;
  *     parser.
  *
  * Retry policy: up to 3 attempts. Each failed parse appends an error
- * feedback block to the user message and re-invokes the LLM. On the third
- * failure we surface `PlannerParseError` — never silently truncate or
- * rename fields.
+ * feedback block to the user message and re-invokes the LLM. If all attempts
+ * fail, the planner emits a degraded but valid memo with an explicit warning
+ * instead of crashing the whole chapter pipeline.
  */
 export class PlannerAgent extends BaseAgent {
   get name(): string {
@@ -261,7 +261,103 @@ export class PlannerAgent extends BaseAgent {
       }
     }
 
-    throw lastError ?? new PlannerParseError("memo planner exhausted retries without a specific error");
+    const fallbackError = lastError ?? new PlannerParseError("memo planner exhausted retries without a specific error");
+    this.log?.warn(`[planner] memo planner fell back after ${MEMO_RETRY_LIMIT} attempts: ${fallbackError.message}`);
+    return parseMemo(
+      this.buildFallbackMemoMarkdown({
+        chapterNumber: input.chapterNumber,
+        isGoldenOpening: input.isGoldenOpening,
+        fallbackGoal: input.fallbackGoal,
+        errorMessage: fallbackError.message,
+        language,
+      }),
+      input.chapterNumber,
+      input.isGoldenOpening,
+    );
+  }
+
+  private buildFallbackMemoMarkdown(input: {
+    readonly chapterNumber: number;
+    readonly isGoldenOpening: boolean;
+    readonly fallbackGoal: string;
+    readonly errorMessage: string;
+    readonly language: "zh" | "en";
+  }): string {
+    if (input.language === "en") {
+      return [
+        `# Chapter ${input.chapterNumber} memo`,
+        "",
+        "## Chapter goal",
+        input.fallbackGoal || `Continue chapter ${input.chapterNumber} according to the current outline`,
+        "",
+        "## Thread refs",
+        "none",
+        "",
+        "## Current task",
+        `Use the current chapter goal and authoritative book context to continue chapter ${input.chapterNumber} without inventing a new direction.`,
+        "",
+        "## What the reader is waiting for right now",
+        "Keep the reader's active expectation from the outline and previous chapter in focus; do not replace it with a generic scene.",
+        "",
+        "## To pay off / to keep buried",
+        "Pay off only the near-term promises already supported by context; keep larger secrets buried unless the outline explicitly asks for them.",
+        "",
+        "## What the slow / transitional beats carry",
+        "If a slower beat is needed, make it carry pressure, evidence, relationship movement, or a concrete setup for the next action.",
+        "",
+        "## Three-question check on the key choice",
+        "The protagonist's main choice must have a reason, match current interest, and stay consistent with the established persona.",
+        "",
+        "## Required end-of-chapter change",
+        "End with a concrete change in information, pressure, relationship, objective, or risk so the chapter is not only summary.",
+        "",
+        "## Hook ledger for this chapter",
+        "advance: keep the active promise moving; resolve: only settle what has evidence; defer: preserve larger threads for later chapters.",
+        "",
+        "## Do not",
+        "Do not contradict established facts, ignore the user's current instruction, or turn the fallback memo into a new outline.",
+        "",
+        "## Planner warning",
+        `The model failed to produce a valid chapter memo after ${MEMO_RETRY_LIMIT} attempts. Last parser error: ${input.errorMessage}`,
+      ].join("\n");
+    }
+
+    return [
+      `# 第 ${input.chapterNumber} 章 memo`,
+      "",
+      "## 本章目标",
+      input.fallbackGoal || `按当前大纲继续推进第 ${input.chapterNumber} 章`,
+      "",
+      "## 关联线索",
+      "无",
+      "",
+      "## 当前任务",
+      `沿用当前章节目标和权威设定推进第 ${input.chapterNumber} 章，不临时改方向，也不把章节写成泛泛过渡。`,
+      "",
+      "## 读者此刻在等什么",
+      "延续大纲和上一章形成的读者期待，优先回应当前已经建立的压力、证据、关系或目标变化。",
+      "",
+      "## 该兑现的 / 暂不掀的",
+      "只兑现已有上下文支撑的近端承诺；更大的秘密、身份、幕后主使或终局信息，除非大纲明确要求，否则继续压住。",
+      "",
+      "## 日常/过渡承担什么任务",
+      "如果需要日常或过渡，它必须承担压力、证据、人物关系、目标变化或下一步行动铺垫，不能只是闲聊和气氛。",
+      "",
+      "## 关键抉择过三连问",
+      "主角本章的关键选择必须有原因、符合当前利益，并且不背离已经建立的人设和行为逻辑。",
+      "",
+      "## 章尾必须发生的改变",
+      "章尾至少要在信息、压力、关系、目标或风险上发生一个明确变化，避免只有剧情摘要没有推进。",
+      "",
+      "## 本章 hook 账",
+      "advance: 推进当前活跃承诺；resolve: 只结清已有证据支撑的线索；defer: 大线继续保留到更合适的位置。",
+      "",
+      "## 不要做",
+      "不要违背既成事实，不要无视用户当前指令，不要把 fallback memo 当成新大纲重写整本书。",
+      "",
+      "## Planner warning",
+      `模型连续 ${MEMO_RETRY_LIMIT} 次没有产出合格章节 memo。最后一次解析错误：${input.errorMessage}`,
+    ].join("\n");
   }
 
   private isGoldenOpeningChapter(language: string | undefined, chapterNumber: number): boolean {

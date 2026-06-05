@@ -92,9 +92,11 @@ describe("parseMemo", () => {
     expect(memo.threadRefs).toEqual(["H03"]);
   });
 
-  it("throws when goal exceeds 50 chars", () => {
+  it("keeps long goal semantics in the memo body while deriving a short display goal", () => {
     const longGoal = "把异常钉成实证".repeat(10);
-    expect(() => parseMemo(makeRaw({ goal: longGoal }), 12, false)).toThrow(/goal too long/);
+    const memo = parseMemo(makeRaw({ goal: longGoal }), 12, false);
+    expect(memo.goal.length).toBeLessThanOrEqual(50);
+    expect(memo.body).toContain(longGoal);
   });
 
   it.each([

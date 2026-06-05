@@ -6,7 +6,6 @@ import { PlannerAgent } from "../agents/planner.js";
 import * as llmProvider from "../llm/provider.js";
 import type { LLMClient } from "../llm/provider.js";
 import type { BookConfig } from "../models/book.js";
-import { PlannerParseError } from "../utils/chapter-memo-parser.js";
 
 const VALID_BODY = `
 ## 当前任务
@@ -316,19 +315,23 @@ ${VALID_EN_BODY}
     expect(userMsg?.content).not.toContain("黄金三章规划指引");
   });
 
-  it("throws PlannerParseError when all 3 attempts fail", async () => {
+  it("returns a degraded memo instead of throwing when all 3 attempts fail", async () => {
     vi.spyOn(llmProvider, "chatCompletion").mockResolvedValue({
       content: "permanently broken",
       usage: ZERO_USAGE,
     } as unknown as Awaited<ReturnType<typeof llmProvider.chatCompletion>>);
 
-    await expect(
-      makePlanner().planChapter({
-        book: makeBook(),
-        bookDir,
-        chapterNumber: 2,
-      }),
-    ).rejects.toBeInstanceOf(PlannerParseError);
+    const result = await makePlanner().planChapter({
+      book: makeBook(),
+      bookDir,
+      chapterNumber: 2,
+    });
+
+    expect(result.memo.chapter).toBe(2);
+    expect(result.memo.goal.length).toBeGreaterThan(0);
+    expect(result.memo.body).toContain("## 当前任务");
+    expect(result.memo.body).toContain("## Planner warning");
+    expect(result.intentMarkdown).toContain("Planner warning");
   });
 
   // Phase hotfix 5: planner.intent.mustAvoid must come from the Phase 5
