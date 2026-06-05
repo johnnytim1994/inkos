@@ -344,6 +344,52 @@ describe("Phase 5 consolidation — parser accepts 5-section output (current_sta
     expect(out.roles?.map((role) => role.name)).toContain("林辞");
   });
 
+  it("accepts plain Markdown section headings without SECTION markers", async () => {
+    const agent = buildAgent();
+    vi.spyOn(agent as unknown as { chat: (...args: unknown[]) => Promise<unknown> }, "chat")
+      .mockResolvedValue({
+        content: [
+          "# 故事框架",
+          "## 主题与基调",
+          "旧城债务调查，第一人称现实压迫。",
+          "",
+          "# 分卷地图",
+          "## 第一卷",
+          "第 1 章从雨水泡开的旧账本开始。",
+          "",
+          "# 角色",
+          "---ROLE---",
+          "tier: major",
+          "name: 沈临",
+          "---CONTENT---",
+          "## 核心标签",
+          "茶馆老板，慢但准。",
+          "",
+          "# 本书规则",
+          "## 主角",
+          "- 名字：沈临",
+          "## 叙事人称",
+          "- 第一人称",
+          "## 禁止事项",
+          "- 不要突然开挂。",
+          "",
+          "# 待回收钩子",
+          "| hook_id | 起始章节 | 类型 | 状态 | 最近推进 | 预期回收 | 回收节奏 | 备注 |",
+          "| --- | --- | --- | --- | --- | --- | --- | --- |",
+          "| H01 | 0 | 主线 | open | 0 | 旧账本名单 | 近期 | 雨巷旧账本 |",
+        ].join("\n"),
+        usage: ZERO_USAGE,
+      });
+
+    const out = await agent.generateFoundation(baseBook());
+
+    expect(out.storyFrame).toContain("旧城债务调查");
+    expect(out.volumeMap).toContain("雨水泡开的旧账本");
+    expect(out.bookRules).toContain("第一人称");
+    expect(out.pendingHooks).toContain("H01");
+    expect(out.roles?.map((role) => role.name)).toContain("沈临");
+  });
+
   it("preserves legacy 7-section input (current_state + rhythm_principles still present)", async () => {
     const legacyResponse = [
       "=== SECTION: story_frame ===",

@@ -654,18 +654,7 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
   }
 
   private parseSections(content: string, language: "zh" | "en"): ArchitectOutput {
-    const parsedSections = new Map<string, string>();
-    const sectionPattern = /^\s{0,3}(?:#{1,6}\s*)?===\s*SECTION\s*[：:]\s*([^\n=]+?)\s*===\s*(?:#+\s*)?$/gim;
-    const matches = [...content.matchAll(sectionPattern)];
-
-    for (let i = 0; i < matches.length; i++) {
-      const match = matches[i]!;
-      const rawName = match[1] ?? "";
-      const start = (match.index ?? 0) + match[0].length;
-      const end = matches[i + 1]?.index ?? content.length;
-      const normalizedName = this.normalizeSectionName(rawName);
-      parsedSections.set(normalizedName, content.slice(start, end).trim());
-    }
+    const parsedSections = this.parseArchitectSectionMap(content);
 
     // Phase 5 new sections take precedence.
     const storyFrame = parsedSections.get("story_frame") ?? "";
@@ -737,6 +726,44 @@ You MUST emit all **5 SECTION blocks in order**: story_frame → volume_map → 
       rhythmPrinciples,
       roles,
     };
+  }
+
+  private parseArchitectSectionMap(content: string): Map<string, string> {
+    const sectionPattern = /^\s{0,3}(?:#{1,6}\s*)?===\s*SECTION\s*[：:]\s*([^\n=]+?)\s*===\s*(?:#+\s*)?$/gim;
+    const markerMatches = [...content.matchAll(sectionPattern)].map((match) => ({
+      name: this.normalizeSectionName(match[1] ?? ""),
+      index: match.index ?? 0,
+      markerLength: match[0].length,
+    }));
+    if (markerMatches.length > 0) {
+      return this.sliceArchitectSections(content, markerMatches);
+    }
+
+    const headingPattern = /^\s{0,3}#{1,3}\s+(.+?)\s*$/gim;
+    const headingMatches = [...content.matchAll(headingPattern)]
+      .map((match) => ({
+        name: this.canonicalSectionNameFromHeading(match[1] ?? ""),
+        index: match.index ?? 0,
+        markerLength: match[0].length,
+      }))
+      .filter((match): match is { readonly name: string; readonly index: number; readonly markerLength: number } =>
+        Boolean(match.name),
+      );
+    return this.sliceArchitectSections(content, headingMatches);
+  }
+
+  private sliceArchitectSections(
+    content: string,
+    matches: ReadonlyArray<{ readonly name: string; readonly index: number; readonly markerLength: number }>,
+  ): Map<string, string> {
+    const parsedSections = new Map<string, string>();
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i]!;
+      const start = match.index + match.markerLength;
+      const end = matches[i + 1]?.index ?? content.length;
+      parsedSections.set(match.name, content.slice(start, end).trim());
+    }
+    return parsedSections;
   }
 
   /**
@@ -1137,6 +1164,67 @@ ${trimmed}\n`;
       .replace(/[`"'*_]/g, " ")
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "");
+  }
+
+  private canonicalSectionNameFromHeading(heading: string): string | null {
+    const normalized = this.normalizeSectionName(heading);
+    if ([
+      "story_frame",
+      "story_bible",
+      "story_foundation",
+      "foundation",
+    ].some((name) => normalized.includes(name))
+      || /(故事框架|故事圣经|基础设定|世界框架|故事底座)/.test(heading)) {
+      return "story_frame";
+    }
+    if ([
+      "volume_map",
+      "volume_outline",
+      "outline",
+      "plot_map",
+    ].some((name) => normalized.includes(name))
+      || /(分卷地图|卷纲|分卷大纲|章节地图|故事大纲)/.test(heading)) {
+      return "volume_map";
+    }
+    if ([
+      "roles",
+      "characters",
+      "character_cards",
+    ].some((name) => normalized.includes(name))
+      || /(角色设定|人物设定|角色卡|主要角色|角色|人物)/.test(heading)) {
+      return "roles";
+    }
+    if ([
+      "book_rules",
+      "rules",
+      "writing_rules",
+    ].some((name) => normalized.includes(name))
+      || /(本书规则|写作规则|运行规则|创作规则|规则卡)/.test(heading)) {
+      return "book_rules";
+    }
+    if ([
+      "pending_hooks",
+      "hooks",
+      "hook_ledger",
+    ].some((name) => normalized.includes(name))
+      || /(待回收钩子|待回收伏笔|伏笔表|钩子表|钩子|伏笔)/.test(heading)) {
+      return "pending_hooks";
+    }
+    if ([
+      "rhythm_principles",
+      "rhythm",
+    ].some((name) => normalized.includes(name))
+      || /(节奏原则|节奏)/.test(heading)) {
+      return "rhythm_principles";
+    }
+    if ([
+      "current_state",
+      "initial_state",
+    ].some((name) => normalized.includes(name))
+      || /(当前状态|初始状态)/.test(heading)) {
+      return "current_state";
+    }
+    return null;
   }
 
   private stripTrailingAssistantCoda(section: string): string {
