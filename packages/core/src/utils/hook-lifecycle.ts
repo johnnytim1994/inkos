@@ -11,9 +11,9 @@ import {
 
 export const DEFAULT_HOOK_LOOKAHEAD_CHAPTERS = 3;
 
-function normalizeStoredHookStatus(status: string): "resolved" | "deferred" | "progressing" | "open" {
+export function normalizeStoredHookStatus(status: string): "resolved" | "deferred" | "progressing" | "open" {
   if (/^(resolved|closed|done|已回收|已解决)$/i.test(status.trim())) return "resolved";
-  if (/^(deferred|paused|hold|延后|延期|搁置|暂缓)$/i.test(status.trim())) return "deferred";
+  if (/^(deferred|paused|hold|dormant|sleeping|延后|延期|搁置|暂缓|未开启|待开启|未启动|待启动|待推进)$/i.test(status.trim())) return "deferred";
   if (/^(progressing|advanced|重大推进|持续推进)$/i.test(status.trim())) return "progressing";
   return "open";
 }

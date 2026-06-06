@@ -196,6 +196,30 @@ describe("agent deterministic writing tools", () => {
     });
   });
 
+  it("does not emit a confirmation card when the proposed action payload is invalid", async () => {
+    const tool = createProposeActionTool("zh");
+
+    const result = await tool.execute("proposal-invalid", {
+      action: "create_book",
+      instruction: "创建《夜间派送》",
+      createBook: {
+        title: "夜间派送",
+        platform: "tomato",
+        unsafeExtra: "must not reach the UI",
+      },
+    } as never);
+
+    expect(result.details).toMatchObject({
+      kind: "proposed_action_error",
+      action: "create_book",
+    });
+    expect(result.details).not.toHaveProperty("actionPayload");
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Invalid proposed action payload"),
+    });
+  });
+
   it("can propose opening existing assisted creation workflows without claiming production", async () => {
     const tool = createProposeActionTool("zh");
 
@@ -284,6 +308,42 @@ describe("agent deterministic writing tools", () => {
         externalContext: "创建《夜间派送》，番茄，100章以内。",
       }),
     );
+  });
+
+  it("derives the confirmed book id from the confirmed title instead of model-supplied bookId", async () => {
+    const pipeline = {
+      initBook: vi.fn(async () => undefined),
+    };
+    const tool = createSubAgentTool(pipeline as never, null, undefined, {
+      actionPayload: {
+        createBook: {
+          title: "Night Delivery",
+          genre: "urban",
+          platform: "tomato",
+          language: "en",
+        },
+      },
+    });
+
+    const result = await tool.execute("tool-confirmed-book-id", {
+      agent: "architect",
+      bookId: "rogue-book",
+      title: "Wrong Title",
+      instruction: "Create Night Delivery.",
+    } as any);
+
+    expect(pipeline.initBook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "night-delivery",
+        title: "Night Delivery",
+      }),
+      expect.anything(),
+    );
+    expect(result.details).toMatchObject({
+      kind: "book_created",
+      bookId: "night-delivery",
+      title: "Night Delivery",
+    });
   });
 
   it("returns an architect incomplete result instead of throwing when foundation repair fails", async () => {

@@ -18,7 +18,7 @@ import { createPlayDB, type PlayGraphDB } from "../play/play-db-factory.js";
 import { PlayRunner, type PlayOpeningSeedResult, type PlayStepResult } from "../play/play-runner.js";
 import { PlayStore } from "../play/play-store.js";
 import type { AgentContext } from "../agents/base.js";
-import type { ActionPayload } from "../interaction/action-envelope.js";
+import { ActionPayloadSchema, type ActionPayload } from "../interaction/action-envelope.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -298,6 +298,16 @@ function proposedActionPayload(params: ProposeActionParamsType): ActionPayload |
   return Object.keys(payload).length > 0 ? payload : undefined;
 }
 
+function validateProposedActionPayload(payload: ActionPayload | undefined): {
+  readonly payload?: ActionPayload;
+  readonly error?: string;
+} {
+  if (!payload) return {};
+  const parsed = ActionPayloadSchema.safeParse(payload);
+  if (parsed.success) return { payload: parsed.data };
+  return { error: parsed.error.issues.map((issue) => issue.message).join("; ") };
+}
+
 export function createProposeActionTool(
   language: "zh" | "en" = "zh",
   options: ProposeActionToolOptions = {},
@@ -315,7 +325,15 @@ export function createProposeActionTool(
       const isZh = language === "zh";
       const title = params.title?.trim() || proposedActionFallbackTitle(params.action, isZh);
       const summary = params.summary?.trim() || proposedActionFallbackSummary(params.action, isZh);
-      const actionPayload = proposedActionPayload(params);
+      const proposedPayload = validateProposedActionPayload(proposedActionPayload(params));
+      if (proposedPayload.error) {
+        return textResult(`Invalid proposed action payload: ${proposedPayload.error}`, {
+          kind: "proposed_action_error",
+          action: params.action,
+          error: proposedPayload.error,
+        });
+      }
+      const actionPayload = proposedPayload.payload;
       return textResult(
         [
           title,
@@ -463,13 +481,16 @@ export function createSubAgentTool(
                 `Book "${targetBookId}" 架构稿已按要求重写。原书的条目式架构稿已备份到 story/.backup-phase4-<时间戳>/。`,
               );
             }
-            const resolvedTitle = createBookPayload?.title?.trim() || title?.trim();
+            const confirmedTitle = createBookPayload?.title?.trim();
+            const resolvedTitle = confirmedTitle || title?.trim();
             if (!resolvedTitle) {
               return textResult('Error: title is required for the architect agent.');
             }
-            const id = bookId
-              ? assertSafeBookId(bookId, "architect.bookId")
-              : deriveBookIdFromTitle(resolvedTitle) || `book-${Date.now().toString(36)}`;
+            const id = confirmedTitle
+              ? deriveBookIdFromTitle(confirmedTitle) || `book-${Date.now().toString(36)}`
+              : bookId
+                ? assertSafeBookId(bookId, "architect.bookId")
+                : deriveBookIdFromTitle(resolvedTitle) || `book-${Date.now().toString(36)}`;
             const now = new Date().toISOString();
             const resolvedLanguage = createBookPayload?.language ?? language ?? inferLanguage(instruction);
             progress(`Starting architect for book "${id}"...`);

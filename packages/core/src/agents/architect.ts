@@ -383,6 +383,7 @@ ${gp.eraResearch ? `## 年代限制
 伏笔表规则：
 - 第5列必须是纯数字章节号，不能写自然语言描述
 - 建书阶段所有伏笔都还没正式推进，所以第5列统一填 0
+- 普通种子行不要写 open；尚未被正文真正推进的普通伏笔状态写「暂缓」。只有主线承重、依赖链或跨卷结构需要系统预升级时，运行时才会把它视为活跃伏笔
 - 第7列必须填写：立即 / 近期 / 中程 / 慢烧 / 终局 之一
 - 第8列「上游依赖」：列出必须在本伏笔之前种下/回收的上游 hook_id，格式如 [H003, H007]；若无依赖填「无」
 - 第9列「回收卷」：用自然语言写该伏笔计划在哪一卷哪一段回收（例："第2卷中段"、"终卷终章前"）。不强制解析为章号
@@ -580,6 +581,7 @@ Initial hook pool (Markdown table), Phase 7 extended columns:
 Rules:
 - Column 5 is a pure chapter number, not narrative description
 - At book creation all planned hooks have last_advanced_chapter = 0
+- Ordinary seed rows must not use status "open"; use "deferred" until prose actually advances them. Only load-bearing core / dependency / cross-volume hooks may be pre-promoted by the runtime into active hook debt
 - Column 7 must be: immediate / near-term / mid-arc / slow-burn / endgame
 - Column 8 (depends_on): upstream hook ids that must be planted / paid off before this one fires, formatted [H003, H007]; write "none" if no upstream
 - Column 9 (pays_off_in_arc): free-form prose on where this hook is scheduled to pay off (e.g. "mid of volume 2", "right before the finale"). NOT parsed into chapter numbers
@@ -1327,7 +1329,10 @@ ${trimmed}\n`;
     };
     const promotedHooks = normalizedHooks.map((hook) => {
       const decision = shouldPromoteHook(hook, promotionContext);
-      return { ...hook, promoted: decision.promote };
+      const status = !decision.promote && hook.lastAdvancedChapter <= 0
+        ? this.normalizeDormantSeedStatus(hook.status, language)
+        : hook.status;
+      return { ...hook, status, promoted: decision.promote };
     });
 
     return renderHookSnapshot(
@@ -1363,6 +1368,14 @@ ${trimmed}\n`;
       }
     }
     return volumes;
+  }
+
+  private normalizeDormantSeedStatus(status: string | undefined, language: "zh" | "en"): string {
+    const normalized = status?.trim().toLowerCase() ?? "";
+    if (!normalized || /^(open|opened|active)$/i.test(normalized)) {
+      return language === "zh" ? "暂缓" : "deferred";
+    }
+    return status?.trim() || (language === "zh" ? "暂缓" : "deferred");
   }
 
   private parseHookChapterNumber(value: string | undefined): number {
