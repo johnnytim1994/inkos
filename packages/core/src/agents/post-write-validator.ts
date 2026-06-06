@@ -306,6 +306,16 @@ function detectNarrativePersonDrift(
   bookRules: BookRules | null,
 ): PostWriteViolation | null {
   if (bookRules?.narrativePerson !== "first") return null;
+  const innerStateSlip = detectFirstPersonInnerStateSlip(content);
+  if (innerStateSlip) {
+    return {
+      rule: "叙事人称",
+      severity: "error",
+      description: `本书设定为第一人称，但出现了第三人称内感叙述："${innerStateSlip}"`,
+      suggestion: "把这类主观感受、意识、脑内活动改回「我」的内心视角；不要切到第三人称或全知视角。",
+    };
+  }
+
   const name = bookRules.protagonist?.name?.trim();
   if (!name) return null;
   const woCount = content.split("我").length - 1;
@@ -318,6 +328,21 @@ function detectNarrativePersonDrift(
       description: `本书设定为第一人称，但本章几乎不用「我」（${woCount} 次）却反复以「${name}」第三人称叙述（${nameCount} 次）`,
       suggestion: "改用第一人称（主角内心视角）重写本章叙事",
     };
+  }
+  return null;
+}
+
+function detectFirstPersonInnerStateSlip(content: string): string | null {
+  const sentences = content
+    .split(/(?<=[。！？!?])|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  for (const sentence of sentences) {
+    if (!/^[他她]/.test(sentence)) continue;
+    if (/^[他她][^。！？!?]{0,18}(?:觉得|感到|意识到|明白|想起|脑子里|心里|太阳穴)/.test(sentence)) {
+      return sentence.length > 40 ? `${sentence.slice(0, 39)}…` : sentence;
+    }
   }
   return null;
 }

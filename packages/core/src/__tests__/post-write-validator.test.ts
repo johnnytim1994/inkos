@@ -73,6 +73,46 @@ describe("validatePostWrite", () => {
     expect(findRule(result, "叙事人称")).toBeUndefined();
   });
 
+  it("flags a third-person inner-state slip inside an otherwise first-person chapter", () => {
+    const firstPersonRules = BookRulesSchema.parse({
+      narrativePerson: "first",
+      protagonist: { name: "林辞" },
+    });
+    const content = [
+      "我把工单折进内层口袋，拉上拉链。",
+      "",
+      "雨没停。",
+      "",
+      "下楼骑上小电驴，脑子里来回转着两组数字：95.5和87.6，12.7。不是大数字，但足够让一个水电工的直觉烧起来。",
+      "",
+      "回到六栋楼下刹车停下。雨水顺着楼顶雨漏管淌下来，路灯下泛着白亮的水光。我抬头看四楼窗户，灯亮着。",
+      "",
+      "他开始觉得冷了，但那两组数字还在脑子里转，像硬币在太阳穴里互相弹。",
+    ].join("\n");
+
+    const result = validatePostWrite(content, baseProfile, firstPersonRules);
+
+    expect(findRule(result, "叙事人称")).toBeDefined();
+  });
+
+  it("does not treat ordinary first-person observation of another person as POV drift", () => {
+    const firstPersonRules = BookRulesSchema.parse({
+      narrativePerson: "first",
+      protagonist: { name: "林辞" },
+    });
+    const content = [
+      "我站在楼道口，雨水顺着袖口往下淌。",
+      "",
+      "老周从门里探出头。他看了看我，又看了看电表箱，脸色一点点沉下去。",
+      "",
+      "我没有催他，只把工具包放到脚边，等他先开口。",
+    ].join("\n");
+
+    const result = validatePostWrite(content, baseProfile, firstPersonRules);
+
+    expect(findRule(result, "叙事人称")).toBeUndefined();
+  });
+
   it("does not check narrative person when the user never set one", () => {
     const noPersonRules = BookRulesSchema.parse({ protagonist: { name: "陈烬" } });
     const para = "陈烬走进昏暗的档案室，他扫了一眼四周的铁架。陈烬蹲下身，翻出一沓文件，他的指尖发抖。";
