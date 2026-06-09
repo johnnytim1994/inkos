@@ -5,9 +5,9 @@ version: 2.3.4
 metadata: { "openclaw": { "emoji": "📖", "requires": { "bins": ["inkos", "node"], "env": ["OPENAI_API_KEY"] }, "primaryEnv": "OPENAI_API_KEY", "homepage": "https://github.com/Narcooo/inkos", "install": [{ "id": "npm", "kind": "node", "package": "@actalk/inkos", "label": "Install InkOS (npm)" }] } }
 ---
 
-# InkOS - Local AI Fiction Creation System
+# InkOS - Story Creation AI Agent
 
-InkOS is a local creation system for novels, short fiction, covers, and interactive worlds. Prefer the Studio Chat / action-surface workflow for natural-language requests: the model proposes or invokes typed actions, InkOS executes them, and completion is derived from real tool results and files, not from prose claims.
+InkOS is a story creation AI agent for long-form novels, short fiction, scripts, fan works, continuations, covers, and open-world / branching interactive play. Prefer the Studio Chat / action-surface workflow for natural-language requests: the model proposes or invokes typed actions, InkOS executes them, and completion is derived from real tool results and files, not from prose claims.
 
 Long-form writing still uses the chapter pipeline internally:
 - **Input governance**: Architect / Planner / Composer preserve author intent, current focus, outline sections, and relevant truth files instead of injecting everything blindly.
