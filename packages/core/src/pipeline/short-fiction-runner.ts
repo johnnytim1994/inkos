@@ -829,7 +829,7 @@ function buildCoverImagePrompt(salesPackage: ShortFictionSalesPackage, mode: Cov
   }
 
   return [
-    "为中文商业短篇小说生成手机端平台书封，3:4竖图。",
+    "为中文短篇小说生成手机端竖版书封，3:4竖图。",
     ...base.map((line) => line.replace(/^标题：/u, "主标题：").replace(/^用户视觉要求：/u, "包装提示：")),
     "",
     "封面方向：平台短篇书封，不是电影海报。标题字要成为主视觉，预留两到四行大字排版区；人物近景或半身，表情有冷笑、震惊、崩溃、压迫或反杀感；道具少而大，一眼能看出冲突。",

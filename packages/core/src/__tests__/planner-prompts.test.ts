@@ -7,7 +7,7 @@ import {
 } from "../agents/planner-prompts.js";
 
 describe("PLANNER_MEMO_SYSTEM_PROMPT", () => {
-  it("contains key methodology phrases from new.txt", () => {
+  it("contains key mobile web-fiction craft phrases", () => {
     expect(PLANNER_MEMO_SYSTEM_PROMPT).toContain("1 主线 + 1 支线");
     expect(PLANNER_MEMO_SYSTEM_PROMPT).toContain("三连问");
     expect(PLANNER_MEMO_SYSTEM_PROMPT).toContain("不要 YAML frontmatter");

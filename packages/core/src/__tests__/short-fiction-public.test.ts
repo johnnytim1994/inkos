@@ -235,7 +235,6 @@ describe("public short-fiction chain", () => {
       );
       const body = String(fetchMock.mock.calls[0]?.[1]?.body ?? "");
       expect(body).toContain("按用户给出的标题、简介、卖点和视觉要求生成封面图。");
-      expect(body).not.toContain("中文商业短篇小说");
       expect(body).not.toContain("不添加文字");
       expect(body).not.toContain("水印");
       expect(body).not.toContain("固定模板");

@@ -135,7 +135,7 @@ function buildGovernedInputContract(language: "zh" | "en", governed: boolean): s
 }
 
 // ---------------------------------------------------------------------------
-// Chapter memo alignment — 7 sections from new.txt methodology
+// Chapter memo alignment — 7 sections from mobile web-fiction craft methodology
 // ---------------------------------------------------------------------------
 
 function buildChapterMemoContract(language: "zh" | "en", governed: boolean): string {
@@ -220,7 +220,7 @@ function buildCoreRules(lengthSpec: LengthSpec): string {
 - 描写必须服务叙事：环境描写烘托氛围或暗示情节，一笔带过即可；禁止无效描写
 - 日常/过渡段落必须为后续剧情服务：或埋伏笔，或推进关系，或建立反差。纯填充式日常是流水账的温床
 
-## 看点密集度（番茄老师鎏旗，硬尺）
+## 看点密集度（硬尺）
 
 本章正文从头到尾必须满足以下节奏，写完后自检：
 
@@ -230,7 +230,7 @@ function buildCoreRules(lengthSpec: LengthSpec): string {
 - 不靠密度堆砌糊弄——单章里的爽点/钩子/悬念必须服务于本章 goal，不能是和主线无关的孤立段落
 - 如果某段连续 300 字以上是环境、回忆、议论、心理独白而没有推进主线或制造看点，就是水文，必须删或改
 - **密度是靠段落内的语义密度实现，不是靠把段落切碎**：
-  - 叙事段（非对话）**必须 ≥ 40 字**——差不多是手机屏 2 行，低于这个数就是"一句动作 / 一句观察 / 一句反应各自一段"，直接违反 new.txt 的"每段 3-5 行手机阅读"准则
+  - 叙事段（非对话）**必须 ≥ 40 字**——差不多是手机屏 2 行，低于这个数就是"一句动作 / 一句观察 / 一句反应各自一段"，直接违反移动端阅读节奏准则
   - 目标长度：叙事段 40-120 字（3-5 行手机屏），允许偶尔到 150 字讲一段连贯动作链
   - 对话段落不算入"短段"——它天然短，无需并段
   - **短段（<40 字）只在三个场景允许独立成段**：(1) 开场前 300 字里的反转金句（如"她突然跪下"），(2) 章末钩子最后一句（action-climax 定格），(3) 单章 ≤ 3 个"爆点短段"（一击命中、改变局势的关键台词、定格镜头）
@@ -243,7 +243,7 @@ function buildCoreRules(lengthSpec: LengthSpec): string {
     - ✗ "他一愣。/ 手停了。/ 嘴唇发白。"（3 连心理反应各自一段）
     - ✓ "他一愣，手停了，嘴唇发白。"（并段为 1 句节奏紧凑的叙事）
 
-## 章节 80/20 断章（番茄老师弈青锋，硬尺）
+## 章节 80/20 断章（硬尺）
 
 - **永远不要在一章里把本章故事讲完**：本章的主剧情写到 80%，剩下 20% 留给下一章开头消化/揭示/后果
 - 章末必须断在 action-climax 的那一刻：主角刚放大招尚未见效 / 刚拔刀尚未落下 / 刚塞出银行卡尚未转身——不给结果，让读者到下一章才看到
@@ -538,16 +538,16 @@ export function buildGoldenOpeningDiscipline(
   if (language === "en") {
     return `## Golden Opening Discipline — Chapter ${chapterNumber}
 
-This is chapter ${chapterNumber} of the opening three — your prose directly decides whether the reader stays. The Golden Three Chapters rule from new.txt is a hard constraint on your sentences, not advice. Chapter 1: within the first 800 words the protagonist must trip the main-line conflict (chase, dead-end, dispossession, transmigration-as-crisis); long background paragraphs are forbidden, and worldbuilding rides on the protagonist's actions instead of being explained in a block. **The last sentence of the first 300 words (the reader's first phone screen) must land a dramatic / reversal / striking beat — "Officer, I transmigrated"-level, "I'll probably die tomorrow"-level, "I'm attending my own funeral"-level — not background or scene-setting. When the reader scrolls to the bottom of the first screen they must feel pulled into the next line.** Chapter 2: the edge — power, system, rebirth-memory, information advantage — must be **performed** (one concrete event of using it, with a visible consequence), not **announced** (a narrator paragraph saying it exists). Chapter 3: somewhere in this chapter the protagonist's next quantifiable short-term goal must surface, so the reader can name what comes next when they close the page.
+This is chapter ${chapterNumber} of the opening three — your prose directly decides whether the reader stays. The Golden Three Chapters rule is a hard constraint on your sentences, not advice. Chapter 1: within the first 800 words the protagonist must trip the main-line conflict (chase, dead-end, dispossession, transmigration-as-crisis); long background paragraphs are forbidden, and worldbuilding rides on the protagonist's actions instead of being explained in a block. **The last sentence of the first 300 words (the reader's first phone screen) must land a dramatic / reversal / striking beat — "Officer, I transmigrated"-level, "I'll probably die tomorrow"-level, "I'm attending my own funeral"-level — not background or scene-setting. When the reader scrolls to the bottom of the first screen they must feel pulled into the next line.** Chapter 2: the edge — power, system, rebirth-memory, information advantage — must be **performed** (one concrete event of using it, with a visible consequence), not **announced** (a narrator paragraph saying it exists). Chapter 3: somewhere in this chapter the protagonist's next quantifiable short-term goal must surface, so the reader can name what comes next when they close the page.
 
 The discipline that runs across all three opening chapters: paragraphs of three to five lines (mobile reading), verbs over adjectives, and every chapter ends on a small hook — a cliff, an unresolved question, or an emotional gap. **At most two scenes and at most two named characters who actually clash in the chapter (protagonist + one trigger/opponent; walk-on roles get a role label only, no name, no expansion). Editor Cong Yue's rule tightens the cap from 3 to 2 — readers already mix up 3.** Information is layered into action: basic facts (looks, status, situation) emerge from what the protagonist does; key world rules (system mechanics, the deeper logic) attach to plot triggers; a paragraph of pure exposition is forbidden.`;
   }
 
   return `## 黄金三章写作纪律 — 第 ${chapterNumber} 章
 
-这是开篇三章中的第 ${chapterNumber} 章——你写出的每一句话都直接决定读者是否留下来。new.txt 的黄金三章法则对你不是建议，是对句子的硬约束。第 1 章：主角出场 800 字以内必须触发主线冲突（追杀、死局、被夺权、穿越即危机），禁止长段背景铺垫，世界观要通过主角的行动自然带出，不要整段解释。**第 1 章正文前 300 字（手机屏第一页）的最后一句必须是带戏剧性/反差/反转的收尾——警察叔叔我穿越了这类、我大概明天就要死了这类、我躺在自己的葬礼上这类——而不是介绍背景或交代环境。读者第一屏刷到页尾时必须产生"下一句是什么"的拉力。** 第 2 章：金手指/能力/系统/重生记忆/信息差必须"做出来"——一次具体使用的事件、一个看得见的后果——而不是"说出来"——旁白介绍它存在。第 3 章：本章中段必须让主角下一个可量化的短期目标浮上水面，读者合上页面要能说出"接下来他要干什么"。
+这是开篇三章中的第 ${chapterNumber} 章——你写出的每一句话都直接决定读者是否留下来。黄金三章法则对你不是建议，是对句子的硬约束。第 1 章：主角出场 800 字以内必须触发主线冲突（追杀、死局、被夺权、穿越即危机），禁止长段背景铺垫，世界观要通过主角的行动自然带出，不要整段解释。**第 1 章正文前 300 字（手机屏第一页）的最后一句必须是带戏剧性/反差/反转的收尾——警察叔叔我穿越了这类、我大概明天就要死了这类、我躺在自己的葬礼上这类——而不是介绍背景或交代环境。读者第一屏刷到页尾时必须产生"下一句是什么"的拉力。** 第 2 章：金手指/能力/系统/重生记忆/信息差必须"做出来"——一次具体使用的事件、一个看得见的后果——而不是"说出来"——旁白介绍它存在。第 3 章：本章中段必须让主角下一个可量化的短期目标浮上水面，读者合上页面要能说出"接下来他要干什么"。
 
-贯穿开篇三章的纪律：段落 3-5 行（手机阅读节奏），动词压过形容词，每一章结尾必有小钩子——小悬念、未解之问、情绪缺口。**本章场景 ≤ 2 个、有名有姓参与正面冲突的人物 ≤ 2 个（主角 + 1 个触发者或对手；路人甲乙只报身份不给名字，不展开）。番茄老师丛月把开篇人物上限从 3 收紧到 2——3 个已经够读者记混，2 个最稳。** 信息分层植入到动作里：基础信息（外貌、身份、处境）通过主角行动自然带出；关键设定（系统规则、世界底层）结合剧情节点揭示；禁止整段 exposition。`;
+贯穿开篇三章的纪律：段落 3-5 行（手机阅读节奏），动词压过形容词，每一章结尾必有小钩子——小悬念、未解之问、情绪缺口。**本章场景 ≤ 2 个、有名有姓参与正面冲突的人物 ≤ 2 个（主角 + 1 个触发者或对手；路人甲乙只报身份不给名字，不展开）。开篇人物上限从 3 收紧到 2：3 个已经够读者记混，2 个最稳。** 信息分层植入到动作里：基础信息（外貌、身份、处境）通过主角行动自然带出；关键设定（系统规则、世界底层）结合剧情节点揭示；禁止整段 exposition。`;
 }
 
 // ---------------------------------------------------------------------------

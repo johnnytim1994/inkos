@@ -3,7 +3,7 @@ import { buildAgentSystemPrompt, type AgentSystemPromptOptions } from "../agent/
 import type { SessionKind } from "../interaction/session.js";
 
 // Fast structural guard for CI: verifies each surface exposes only the intended
-// tool instructions. Real model adherence is tested in instruction-adherence-benchmark.test.ts
+// tool instructions. Real model adherence is covered by external/manual E2E runs.
 // when INKOS_LIVE_E2E=1 is set.
 type PromptCase = readonly [
   name: string,
