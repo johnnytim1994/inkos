@@ -8,6 +8,8 @@ export {
   createEditTool,
   createWriteFileTool,
   createShortFictionRunTool,
+  createScriptCreationTool,
+  createStoryboardCreationTool,
   createGenerateCoverTool,
   createPlayStartTool,
   createPlayReviseTool,

@@ -67,7 +67,9 @@ import {
   type ActionSource,
   createGenerateCoverTool,
   createPlayStartTool,
+  createScriptCreationTool,
   createShortFictionRunTool,
+  createStoryboardCreationTool,
   createSubAgentTool,
   type ResolvedModel,
   type PipelineConfig,
@@ -111,6 +113,8 @@ const TOOL_LABELS: Record<string, string> = {
   read: "读取文件", edit: "编辑文件", grep: "搜索", ls: "列目录",
   propose_action: "确认动作",
   short_fiction_run: "短篇生产",
+  script_create: "剧本创作",
+  storyboard_create: "分镜创作",
   generate_cover: "生成封面",
   play_edit: "编辑互动世界",
   play_start: "启动互动世界",
@@ -699,6 +703,8 @@ function isConfirmedProductionAction(args: {
     && (
       args.requestedIntent === "create_book"
       || args.requestedIntent === "short_run"
+      || args.requestedIntent === "script_create"
+      || args.requestedIntent === "storyboard_create"
       || args.requestedIntent === "play_start"
       || args.requestedIntent === "generate_cover"
     );
@@ -732,6 +738,8 @@ async function executeConfirmedProductionAction(args: {
   let tool: ReturnType<typeof createSubAgentTool>
     | ReturnType<typeof createShortFictionRunTool>
     | ReturnType<typeof createGenerateCoverTool>
+    | ReturnType<typeof createScriptCreationTool>
+    | ReturnType<typeof createStoryboardCreationTool>
     | ReturnType<typeof createPlayStartTool>;
   let params: Record<string, unknown>;
   let agent: string | undefined;
@@ -774,6 +782,41 @@ async function executeConfirmedProductionAction(args: {
       ...(payload?.sellingPoints ? { sellingPoints: payload.sellingPoints } : {}),
       ...(payload?.coverPrompt ? { coverPrompt: payload.coverPrompt } : {}),
       ...(payload?.outputDir ? { outputDir: payload.outputDir } : {}),
+    };
+  } else if (args.requestedIntent === "script_create") {
+    const payload = actionPayload?.scriptCreate;
+    const title = requirePayloadText(payload?.title, "确认创建剧本缺少标题，请重新生成确认卡。");
+    tool = createScriptCreationTool(args.pipeline, args.root, { actionPayload });
+    params = {
+      title,
+      instruction: args.instruction,
+      ...(payload?.sourceKind ? { sourceKind: payload.sourceKind } : {}),
+      ...(payload?.targetFormat ? { targetFormat: payload.targetFormat } : {}),
+      ...(payload?.sourceText ? { sourceText: payload.sourceText } : {}),
+      ...(payload?.sourcePath ? { sourcePath: payload.sourcePath } : {}),
+      ...(payload?.requirements ? { requirements: payload.requirements } : {}),
+      ...(payload?.episodeCount ? { episodeCount: payload.episodeCount } : {}),
+      ...(payload?.episodeDuration ? { episodeDuration: payload.episodeDuration } : {}),
+      ...(payload?.projectId ? { projectId: payload.projectId } : {}),
+      ...(payload?.outDir ? { outDir: payload.outDir } : {}),
+    };
+  } else if (args.requestedIntent === "storyboard_create") {
+    const payload = actionPayload?.storyboardCreate;
+    const title = requirePayloadText(payload?.title, "确认创建分镜缺少标题，请重新生成确认卡。");
+    tool = createStoryboardCreationTool(args.pipeline, args.root, { actionPayload });
+    params = {
+      title,
+      instruction: args.instruction,
+      ...(payload?.sourceKind ? { sourceKind: payload.sourceKind } : {}),
+      ...(payload?.sourceText ? { sourceText: payload.sourceText } : {}),
+      ...(payload?.sourcePath ? { sourcePath: payload.sourcePath } : {}),
+      ...(payload?.requirements ? { requirements: payload.requirements } : {}),
+      ...(payload?.visualStyle ? { visualStyle: payload.visualStyle } : {}),
+      ...(payload?.aspectRatio ? { aspectRatio: payload.aspectRatio } : {}),
+      ...(payload?.granularity ? { granularity: payload.granularity } : {}),
+      ...(payload?.maxShots ? { maxShots: payload.maxShots } : {}),
+      ...(payload?.projectId ? { projectId: payload.projectId } : {}),
+      ...(payload?.outDir ? { outDir: payload.outDir } : {}),
     };
   } else if (args.requestedIntent === "play_start") {
     const payload = actionPayload?.playStart;

@@ -16,6 +16,8 @@ export const RequestedIntentSchema = z.enum([
   "continuation_import",
   "spinoff_create",
   "style_imitation",
+  "script_create",
+  "storyboard_create",
 ]);
 export type RequestedIntent = z.infer<typeof RequestedIntentSchema>;
 
@@ -55,11 +57,48 @@ export const GenerateCoverActionPayloadSchema = z.object({
   outputDir: z.string().min(1).optional(),
 }).strict();
 
+export const ScriptTargetFormatSchema = z.enum([
+  "vertical_short_drama",
+  "screenplay",
+  "audio_drama",
+  "interactive_script",
+  "general_script",
+]);
+
+export const ScriptCreateActionPayloadSchema = z.object({
+  title: z.string().min(1).optional(),
+  sourceKind: z.string().min(1).optional(),
+  targetFormat: ScriptTargetFormatSchema.optional(),
+  sourceText: z.string().min(1).optional(),
+  sourcePath: z.string().min(1).optional(),
+  requirements: z.string().min(1).optional(),
+  episodeCount: z.number().int().min(1).optional(),
+  episodeDuration: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
+  outDir: z.string().min(1).optional(),
+}).strict();
+
+export const StoryboardCreateActionPayloadSchema = z.object({
+  title: z.string().min(1).optional(),
+  sourceKind: z.string().min(1).optional(),
+  sourceText: z.string().min(1).optional(),
+  sourcePath: z.string().min(1).optional(),
+  requirements: z.string().min(1).optional(),
+  visualStyle: z.string().min(1).optional(),
+  aspectRatio: z.string().min(1).optional(),
+  granularity: z.string().min(1).optional(),
+  maxShots: z.number().int().min(1).optional(),
+  projectId: z.string().min(1).optional(),
+  outDir: z.string().min(1).optional(),
+}).strict();
+
 export const ActionPayloadSchema = z.object({
   createBook: CreateBookActionPayloadSchema.optional(),
   shortRun: ShortRunActionPayloadSchema.optional(),
   playStart: PlayStartActionPayloadSchema.optional(),
   generateCover: GenerateCoverActionPayloadSchema.optional(),
+  scriptCreate: ScriptCreateActionPayloadSchema.optional(),
+  storyboardCreate: StoryboardCreateActionPayloadSchema.optional(),
 }).strict();
 
 export type ActionPayload = z.infer<typeof ActionPayloadSchema>;

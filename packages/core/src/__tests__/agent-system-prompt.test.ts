@@ -174,6 +174,64 @@ describe("buildAgentSystemPrompt", () => {
     });
   });
 
+  describe("script and storyboard modes", () => {
+    it("gates script creation behind a confirmation proposal", () => {
+      const prompt = buildAgentSystemPrompt(null, "zh", "script");
+      expect(prompt).toContain("剧本创作助手");
+      expect(prompt).toContain("propose_action");
+      expect(prompt).toContain("script_create");
+      expect(prompt).toContain("scriptCreate");
+      expect(prompt).toContain("不要在聊天里直接写完整剧本");
+      expect(prompt).toContain("不要凭空改写、压缩或替用户补素材");
+      expect(prompt).not.toContain("script_create：");
+      expect(prompt).not.toContain("storyboard_create：");
+      expect(prompt).not.toContain("short_fiction_run");
+      expect(prompt).not.toContain("play_start");
+      expect(prompt).not.toContain("sub_agent");
+    });
+
+    it("runs script_create only after script creation is confirmed", () => {
+      const prompt = buildAgentSystemPrompt(null, "zh", "script", {
+        actionSource: "button",
+        requestedIntent: "script_create",
+      });
+      expect(prompt).toContain("script_create");
+      expect(prompt).toContain("dramas/");
+      expect(prompt).not.toContain("propose_action");
+      expect(prompt).not.toContain("storyboard_create：");
+      expect(prompt).not.toContain("short_fiction_run");
+      expect(prompt).not.toContain("sub_agent");
+    });
+
+    it("gates storyboard creation behind a confirmation proposal", () => {
+      const prompt = buildAgentSystemPrompt(null, "zh", "storyboard");
+      expect(prompt).toContain("分镜创作助手");
+      expect(prompt).toContain("propose_action");
+      expect(prompt).toContain("storyboard_create");
+      expect(prompt).toContain("storyboardCreate");
+      expect(prompt).toContain("不要在聊天里直接写完整分镜");
+      expect(prompt).toContain("不要凭空改写、压缩或替用户补素材");
+      expect(prompt).not.toContain("script_create：");
+      expect(prompt).not.toContain("storyboard_create：");
+      expect(prompt).not.toContain("short_fiction_run");
+      expect(prompt).not.toContain("play_start");
+      expect(prompt).not.toContain("sub_agent");
+    });
+
+    it("runs storyboard_create only after storyboard creation is confirmed", () => {
+      const prompt = buildAgentSystemPrompt(null, "zh", "storyboard", {
+        actionSource: "button",
+        requestedIntent: "storyboard_create",
+      });
+      expect(prompt).toContain("storyboard_create");
+      expect(prompt).toContain("storyboards/");
+      expect(prompt).not.toContain("propose_action");
+      expect(prompt).not.toContain("script_create：");
+      expect(prompt).not.toContain("short_fiction_run");
+      expect(prompt).not.toContain("sub_agent");
+    });
+  });
+
   describe("play mode", () => {
     it("gates new world start behind a confirmation proposal before a world exists", () => {
       const prompt = buildAgentSystemPrompt(null, "zh", "play", { playWorldExists: false });

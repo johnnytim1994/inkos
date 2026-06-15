@@ -14,6 +14,8 @@ import { assertSafeBookId, deriveBookIdFromTitle } from "../utils/book-id.js";
 import { safeChildPath } from "../utils/path-safety.js";
 import { normalizePlatformId, normalizePlatformOrOther } from "../models/book.js";
 import { generateShortFictionCover, runShortFictionProduction } from "../pipeline/short-fiction-runner.js";
+import { runScriptCreation, runStoryboardCreation } from "../pipeline/script-storyboard-runner.js";
+import type { ScriptTargetFormat } from "../agents/script-storyboard.js";
 import { createPlayDB, type PlayGraphDB } from "../play/play-db-factory.js";
 import { PlayRunner, type PlayOpeningSeedResult, type PlayReplayResult, type PlayStepResult, type PlayVariantRestoreResult } from "../play/play-runner.js";
 import { PlayStore } from "../play/play-store.js";
@@ -112,6 +114,8 @@ const ProposeActionParams = Type.Object({
     Type.Literal("continuation_import"),
     Type.Literal("spinoff_create"),
     Type.Literal("style_imitation"),
+    Type.Literal("script_create"),
+    Type.Literal("storyboard_create"),
   ], {
     description: "The production or assisted Studio workflow the user appears to want, but which needs explicit confirmation from general chat.",
   }),
@@ -195,6 +199,37 @@ const ProposeActionParams = Type.Object({
     coverPrompt: Type.Optional(Type.String({ description: "Confirmed visual direction." })),
     outputDir: Type.Optional(Type.String({ description: "Confirmed output directory." })),
   }, { description: "Structured execution args for action=generate_cover." })),
+  scriptCreate: Type.Optional(Type.Object({
+    title: Type.Optional(Type.String({ description: "Confirmed script project title." })),
+    sourceKind: Type.Optional(Type.String({ description: "Source type, e.g. novel excerpt, original idea, outline, existing script." })),
+    targetFormat: Type.Optional(Type.Union([
+      Type.Literal("vertical_short_drama"),
+      Type.Literal("screenplay"),
+      Type.Literal("audio_drama"),
+      Type.Literal("interactive_script"),
+      Type.Literal("general_script"),
+    ], { description: "Confirmed script output format." })),
+    sourceText: Type.Optional(Type.String({ description: "User-provided source text. For long sources, prefer sourcePath instead of summarizing." })),
+    sourcePath: Type.Optional(Type.String({ description: "Optional project-relative source file path." })),
+    requirements: Type.Optional(Type.String({ description: "Confirmed script format, production constraints, tone, episode structure, or user preferences." })),
+    episodeCount: Type.Optional(Type.Number({ description: "Optional target episode/segment count." })),
+    episodeDuration: Type.Optional(Type.String({ description: "Optional per-episode/per-segment duration." })),
+    projectId: Type.Optional(Type.String({ description: "Optional output id under dramas/." })),
+    outDir: Type.Optional(Type.String({ description: "Optional project-relative output directory. Default dramas/." })),
+  }, { description: "Structured execution args for action=script_create." })),
+  storyboardCreate: Type.Optional(Type.Object({
+    title: Type.Optional(Type.String({ description: "Confirmed storyboard project title." })),
+    sourceKind: Type.Optional(Type.String({ description: "Source type, e.g. script, novel excerpt, idea, scene list." })),
+    sourceText: Type.Optional(Type.String({ description: "User-provided source text. For long sources, prefer sourcePath instead of summarizing." })),
+    sourcePath: Type.Optional(Type.String({ description: "Optional project-relative source file path." })),
+    requirements: Type.Optional(Type.String({ description: "Confirmed shot/storyboard requirements." })),
+    visualStyle: Type.Optional(Type.String({ description: "Confirmed visual style, if the user specified one." })),
+    aspectRatio: Type.Optional(Type.String({ description: "Confirmed aspect ratio, e.g. 9:16, 16:9, 1:1." })),
+    granularity: Type.Optional(Type.String({ description: "Confirmed storyboard granularity." })),
+    maxShots: Type.Optional(Type.Number({ description: "Optional max shot count." })),
+    projectId: Type.Optional(Type.String({ description: "Optional output id under storyboards/." })),
+    outDir: Type.Optional(Type.String({ description: "Optional project-relative output directory. Default storyboards/." })),
+  }, { description: "Structured execution args for action=storyboard_create." })),
 });
 
 type ProposeActionParamsType = Static<typeof ProposeActionParams>;
@@ -203,9 +238,11 @@ type ProposeActionToolOptions = {
   readonly sameSession?: boolean;
 };
 
-function proposedActionSessionKind(action: ProposeActionParamsType["action"]): "book-create" | "short" | "play" | "chat" {
+function proposedActionSessionKind(action: ProposeActionParamsType["action"]): "book-create" | "short" | "play" | "script" | "storyboard" | "chat" {
   if (action === "create_book") return "book-create";
   if (action === "play_start") return "play";
+  if (action === "script_create") return "script";
+  if (action === "storyboard_create") return "storyboard";
   if (action === "fanfic_init" || action === "continuation_import" || action === "spinoff_create" || action === "style_imitation") return "chat";
   return "short";
 }
@@ -236,6 +273,10 @@ function proposedActionFallbackTitle(action: ProposeActionParamsType["action"], 
       return isZh ? "打开番外创作" : "Open side-story workflow";
     case "style_imitation":
       return isZh ? "打开仿写/文风分析" : "Open style imitation";
+    case "script_create":
+      return isZh ? "创建剧本" : "Create script";
+    case "storyboard_create":
+      return isZh ? "创建分镜" : "Create storyboard";
   }
 }
 
@@ -309,6 +350,14 @@ function proposedActionPayload(params: ProposeActionParamsType): ActionPayload |
     const generateCover = compactObject(params.generateCover);
     if (generateCover) payload.generateCover = generateCover;
   }
+  if (params.action === "script_create") {
+    const scriptCreate = compactObject(params.scriptCreate);
+    if (scriptCreate) payload.scriptCreate = scriptCreate;
+  }
+  if (params.action === "storyboard_create") {
+    const storyboardCreate = compactObject(params.storyboardCreate);
+    if (storyboardCreate) payload.storyboardCreate = storyboardCreate;
+  }
   return Object.keys(payload).length > 0 ? payload : undefined;
 }
 
@@ -340,6 +389,14 @@ function assertExecutableProposedAction(params: ProposeActionParamsType, payload
   }
   if (params.action === "generate_cover") {
     requireProposedText(payload?.generateCover?.title, "generateCover.title");
+    return;
+  }
+  if (params.action === "script_create") {
+    requireProposedText(payload?.scriptCreate?.title, "scriptCreate.title");
+    return;
+  }
+  if (params.action === "storyboard_create") {
+    requireProposedText(payload?.storyboardCreate?.title, "storyboardCreate.title");
   }
 }
 
@@ -814,7 +871,194 @@ function summarizeCoverGenerationError(error: string | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Standalone Cover Tool
+// 3. Script and Storyboard tools
+// ---------------------------------------------------------------------------
+
+const ScriptCreateParams = Type.Object({
+  title: Type.String({
+    description: "Required script project title.",
+  }),
+  instruction: Type.String({
+    description: "Confirmed script creation instruction, including format, source, and user preferences.",
+  }),
+  sourceKind: Type.Optional(Type.String({
+    description: "Source type, e.g. novel excerpt, original idea, outline, existing script.",
+  })),
+  targetFormat: Type.Optional(Type.Union([
+    Type.Literal("vertical_short_drama"),
+    Type.Literal("screenplay"),
+    Type.Literal("audio_drama"),
+    Type.Literal("interactive_script"),
+    Type.Literal("general_script"),
+  ], { description: "Confirmed script output format." })),
+  sourceText: Type.Optional(Type.String({
+    description: "User-provided source text. For long sources, prefer sourcePath instead of summarizing.",
+  })),
+  sourcePath: Type.Optional(Type.String({
+    description: "Optional project-relative source file path.",
+  })),
+  requirements: Type.Optional(Type.String({
+    description: "Confirmed script format, production constraints, tone, episode structure, or user preferences.",
+  })),
+  episodeCount: Type.Optional(Type.Number({
+    description: "Optional target episode/segment count.",
+  })),
+  episodeDuration: Type.Optional(Type.String({
+    description: "Optional per-episode/per-segment duration.",
+  })),
+  projectId: Type.Optional(Type.String({
+    description: "Optional output id under dramas/.",
+  })),
+  outDir: Type.Optional(Type.String({
+    description: "Optional project-relative output directory. Default dramas/.",
+  })),
+});
+
+type ScriptCreateParamsType = Static<typeof ScriptCreateParams>;
+
+export function createScriptCreationTool(
+  pipeline: PipelineRunner,
+  projectRoot: string,
+  options: { readonly actionPayload?: ActionPayload } = {},
+): AgentTool<typeof ScriptCreateParams> {
+  return {
+    name: "script_create",
+    description:
+      "Create a script project from a novel excerpt, idea, outline, or existing script. " +
+      "Writes human-readable Markdown spec and script files under dramas/.",
+    label: "Script Creation",
+    parameters: ScriptCreateParams,
+    async execute(
+      _toolCallId: string,
+      params: ScriptCreateParamsType,
+      _signal?: AbortSignal,
+      onUpdate?: AgentToolUpdateCallback,
+    ): Promise<AgentToolResult<unknown>> {
+      const progress = (message: string) => onUpdate?.(textResult(message));
+      const payload = options.actionPayload?.scriptCreate;
+      const result = await runScriptCreation({
+        projectRoot,
+        runtime: pipeline.createAgentContext("script-creation"),
+        title: payload?.title ?? params.title,
+        instruction: params.instruction,
+        sourceKind: payload?.sourceKind ?? params.sourceKind,
+        targetFormat: (payload?.targetFormat ?? params.targetFormat) as ScriptTargetFormat | undefined,
+        sourceText: payload?.sourceText ?? params.sourceText,
+        sourcePath: payload?.sourcePath ?? params.sourcePath,
+        requirements: payload?.requirements ?? params.requirements,
+        episodeCount: payload?.episodeCount ?? params.episodeCount,
+        episodeDuration: payload?.episodeDuration ?? params.episodeDuration,
+        projectId: payload?.projectId ?? params.projectId,
+        outDir: payload?.outDir ?? params.outDir,
+        onProgress: progress,
+      });
+
+      return textResult(
+        [
+          `Script "${result.projectId}" completed.`,
+          `Spec: ${result.specPath}`,
+          `Script: ${result.scriptPath}`,
+        ].join("\n"),
+        { kind: "script_created", ...result },
+      );
+    },
+  };
+}
+
+const StoryboardCreateParams = Type.Object({
+  title: Type.String({
+    description: "Required storyboard project title.",
+  }),
+  instruction: Type.String({
+    description: "Confirmed storyboard creation instruction, including source, style, aspect ratio, and shot granularity.",
+  }),
+  sourceKind: Type.Optional(Type.String({
+    description: "Source type, e.g. script, novel excerpt, idea, scene list.",
+  })),
+  sourceText: Type.Optional(Type.String({
+    description: "User-provided source text. For long sources, prefer sourcePath instead of summarizing.",
+  })),
+  sourcePath: Type.Optional(Type.String({
+    description: "Optional project-relative source file path.",
+  })),
+  requirements: Type.Optional(Type.String({
+    description: "Confirmed shot/storyboard requirements.",
+  })),
+  visualStyle: Type.Optional(Type.String({
+    description: "Confirmed visual style, if the user specified one.",
+  })),
+  aspectRatio: Type.Optional(Type.String({
+    description: "Confirmed aspect ratio, e.g. 9:16, 16:9, 1:1.",
+  })),
+  granularity: Type.Optional(Type.String({
+    description: "Confirmed storyboard granularity.",
+  })),
+  maxShots: Type.Optional(Type.Number({
+    description: "Optional max shot count.",
+  })),
+  projectId: Type.Optional(Type.String({
+    description: "Optional output id under storyboards/.",
+  })),
+  outDir: Type.Optional(Type.String({
+    description: "Optional project-relative output directory. Default storyboards/.",
+  })),
+});
+
+type StoryboardCreateParamsType = Static<typeof StoryboardCreateParams>;
+
+export function createStoryboardCreationTool(
+  pipeline: PipelineRunner,
+  projectRoot: string,
+  options: { readonly actionPayload?: ActionPayload } = {},
+): AgentTool<typeof StoryboardCreateParams> {
+  return {
+    name: "storyboard_create",
+    description:
+      "Create a storyboard project and image prompts from a script, novel excerpt, idea, or scene list. " +
+      "Writes human-readable Markdown spec, storyboard, and image prompt files under storyboards/.",
+    label: "Storyboard Creation",
+    parameters: StoryboardCreateParams,
+    async execute(
+      _toolCallId: string,
+      params: StoryboardCreateParamsType,
+      _signal?: AbortSignal,
+      onUpdate?: AgentToolUpdateCallback,
+    ): Promise<AgentToolResult<unknown>> {
+      const progress = (message: string) => onUpdate?.(textResult(message));
+      const payload = options.actionPayload?.storyboardCreate;
+      const result = await runStoryboardCreation({
+        projectRoot,
+        runtime: pipeline.createAgentContext("storyboard-creation"),
+        title: payload?.title ?? params.title,
+        instruction: params.instruction,
+        sourceKind: payload?.sourceKind ?? params.sourceKind,
+        sourceText: payload?.sourceText ?? params.sourceText,
+        sourcePath: payload?.sourcePath ?? params.sourcePath,
+        requirements: payload?.requirements ?? params.requirements,
+        visualStyle: payload?.visualStyle ?? params.visualStyle,
+        aspectRatio: payload?.aspectRatio ?? params.aspectRatio,
+        granularity: payload?.granularity ?? params.granularity,
+        maxShots: payload?.maxShots ?? params.maxShots,
+        projectId: payload?.projectId ?? params.projectId,
+        outDir: payload?.outDir ?? params.outDir,
+        onProgress: progress,
+      });
+
+      return textResult(
+        [
+          `Storyboard "${result.projectId}" completed.`,
+          `Spec: ${result.specPath}`,
+          `Storyboard: ${result.storyboardPath}`,
+          `Image prompts: ${result.imagePromptsPath}`,
+        ].join("\n"),
+        { kind: "storyboard_created", ...result },
+      );
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 4. Standalone Cover Tool
 // ---------------------------------------------------------------------------
 
 const GenerateCoverParams = Type.Object({

@@ -15,6 +15,8 @@ import {
   createPlayStartTool,
   createProposeActionTool,
   createRenameEntityTool,
+  createScriptCreationTool,
+  createStoryboardCreationTool,
   createWriteFileTool,
   createWriteTruthFileTool,
 } from "../agent/agent-tools.js";
@@ -282,6 +284,66 @@ describe("agent deterministic writing tools", () => {
         playStart: {
           worldContract: expect.stringContaining("室友会自主行动"),
           visualContract: expect.stringContaining("不要绿蓝紫橙边框"),
+        },
+      },
+    });
+  });
+
+  it("keeps script creation specs in the structured confirmation payload", async () => {
+    const tool = createProposeActionTool("zh");
+
+    const result = await tool.execute("proposal-script", {
+      action: "script_create",
+      instruction: "把冷库账页改成 12 集竖屏短剧，调查线七成、家怨三成。",
+      scriptCreate: {
+        title: "冷库账页",
+        sourceKind: "小说大纲",
+        targetFormat: "vertical_short_drama",
+        requirements: "保留账页、赔偿款、失踪孩子三条线。",
+        episodeCount: 12,
+        episodeDuration: "2分钟",
+      },
+    });
+
+    expect(result.details).toMatchObject({
+      kind: "proposed_action",
+      action: "script_create",
+      targetSessionKind: "script",
+      actionPayload: {
+        scriptCreate: {
+          title: "冷库账页",
+          targetFormat: "vertical_short_drama",
+          episodeCount: 12,
+        },
+      },
+    });
+  });
+
+  it("keeps storyboard specs in the structured confirmation payload", async () => {
+    const tool = createProposeActionTool("zh");
+
+    const result = await tool.execute("proposal-storyboard", {
+      action: "storyboard_create",
+      instruction: "把剧本拆成 9:16 分镜，写实冷色，每场给图像提示词。",
+      storyboardCreate: {
+        title: "冷库账页分镜",
+        sourceKind: "剧本",
+        visualStyle: "写实冷色",
+        aspectRatio: "9:16",
+        granularity: "按场景关键镜头拆分",
+        maxShots: 18,
+      },
+    });
+
+    expect(result.details).toMatchObject({
+      kind: "proposed_action",
+      action: "storyboard_create",
+      targetSessionKind: "storyboard",
+      actionPayload: {
+        storyboardCreate: {
+          title: "冷库账页分镜",
+          visualStyle: "写实冷色",
+          maxShots: 18,
         },
       },
     });
@@ -687,6 +749,26 @@ describe("agent deterministic writing tools", () => {
     expect(toolText).toContain("revise the cover prompt");
     expect(schemaText).toContain("coverModel");
     expect(toolText).not.toContain("short_fiction_run");
+  });
+
+  it("exposes script and storyboard creation as standalone production tools", () => {
+    const pipeline = {
+      createAgentContext: vi.fn(() => ({})),
+    };
+    const scriptTool = createScriptCreationTool(pipeline as never, root);
+    const storyboardTool = createStoryboardCreationTool(pipeline as never, root);
+
+    expect(scriptTool.name).toBe("script_create");
+    expect(JSON.stringify(scriptTool.parameters)).toContain("targetFormat");
+    expect(JSON.stringify(scriptTool.parameters)).toContain("episodeCount");
+    expect(JSON.stringify({ description: scriptTool.description, parameters: scriptTool.parameters }))
+      .not.toContain("short_fiction_run");
+
+    expect(storyboardTool.name).toBe("storyboard_create");
+    expect(JSON.stringify(storyboardTool.parameters)).toContain("visualStyle");
+    expect(JSON.stringify(storyboardTool.parameters)).toContain("maxShots");
+    expect(JSON.stringify({ description: storyboardTool.description, parameters: storyboardTool.parameters }))
+      .not.toContain("short_fiction_run");
   });
 
   it("allows architect revise mode to use the active book", async () => {
