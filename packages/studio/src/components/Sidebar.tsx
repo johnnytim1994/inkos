@@ -43,6 +43,9 @@ import {
   Pencil,
   Trash2,
   GitBranch,
+  Clapperboard,
+  Rows3,
+  Film,
 } from "lucide-react";
 import { InkosLogo } from "./InkosLogo";
 
@@ -51,6 +54,9 @@ function SessionKindIcon({ kind, className }: { readonly kind?: string; readonly
   const Icon =
     kind === "play" ? Gamepad2
     : kind === "short" ? ScrollText
+    : kind === "script" ? Clapperboard
+    : kind === "storyboard" ? Rows3
+    : kind === "interactive-film" ? Film
     : kind === "book-create" ? BookPlus
     : MessageSquare;
   return <Icon size={13} className={className} />;
@@ -241,7 +247,7 @@ export function Sidebar({ nav, activePage, sse, t }: {
     nav.toBookCreate();
   };
 
-  const launchProjectMode = (kind: "short" | "play", playMode?: "guided" | "open") => {
+  const launchProjectMode = (kind: "short" | "play" | "script" | "storyboard" | "interactive-film", playMode?: "guided" | "open") => {
     setProjectChatExpanded(true);
     // Play mode (分支互动 = guided / 自由互动 = open) is now decided here at the
     // launcher, not via an in-chat button.
@@ -284,7 +290,7 @@ export function Sidebar({ nav, activePage, sse, t }: {
 
       {/* Main Navigation */}
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-6">
-        {/* InkOS Create Section — always visible, two columns × four rows */}
+        {/* InkOS Create Section — always visible, two columns. */}
         <div>
           <div className="px-3 mb-2.5">
             <span className="text-[16px] leading-6 uppercase tracking-[0.1em] text-muted-foreground font-bold">
@@ -294,6 +300,9 @@ export function Sidebar({ nav, activePage, sse, t }: {
           <div className="grid grid-cols-2 gap-1">
             <CreateItem icon={<BookPlus size={16} />} label={t("nav.createNovel")} active={activePage === "book-create"} onClick={handleOpenBookCreate} />
             <CreateItem icon={<ScrollText size={16} />} label={t("nav.createShort")} onClick={() => launchProjectMode("short")} />
+            <CreateItem icon={<Clapperboard size={16} />} label={t("nav.createScript")} onClick={() => launchProjectMode("script")} />
+            <CreateItem icon={<Rows3 size={16} />} label={t("nav.createStoryboard")} onClick={() => launchProjectMode("storyboard")} />
+            <CreateItem icon={<Film size={16} />} label={t("nav.createInteractiveFilm")} onClick={() => launchProjectMode("interactive-film")} />
             <CreateItem icon={<Feather size={16} />} label={t("nav.createFanfic")} onClick={() => nav.toImport("fanfic")} />
             <CreateItem icon={<BookCopy size={16} />} label={t("nav.createSpinoff")} onClick={() => nav.toImport("spinoff")} />
             <CreateItem icon={<Wand2 size={16} />} label={t("nav.createImitation")} onClick={() => nav.toImport("imitation")} />

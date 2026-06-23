@@ -32,6 +32,9 @@ import {
   createPlayStartTool,
   createPlayStepTool,
   createProposeActionTool,
+  createScriptCreationTool,
+  createStoryboardCreationTool,
+  createInteractiveFilmCreationTool,
 } from "./agent-tools.js";
 import { createBookContextTransform } from "./context-transform.js";
 import {
@@ -247,6 +250,9 @@ function isTerminalProductionToolName(toolName: unknown): boolean {
   return toolName === "propose_action"
     || toolName === "sub_agent"
     || toolName === "short_fiction_run"
+    || toolName === "script_create"
+    || toolName === "storyboard_create"
+    || toolName === "interactive_film_create"
     || toolName === "generate_cover"
     || toolName === "play_start"
     || toolName === "play_edit"
@@ -656,6 +662,27 @@ function createAgentToolsForMode(params: {
     }
     if (isConfirmed("generate_cover")) {
       return [createGenerateCoverTool(params.projectRoot, { actionPayload: params.actionPayload })];
+    }
+    return [proposalTool];
+  }
+
+  if (params.sessionKind === "script") {
+    if (isConfirmed("script_create")) {
+      return [createScriptCreationTool(params.pipeline, params.projectRoot, { actionPayload: params.actionPayload })];
+    }
+    return [proposalTool];
+  }
+
+  if (params.sessionKind === "storyboard") {
+    if (isConfirmed("storyboard_create")) {
+      return [createStoryboardCreationTool(params.pipeline, params.projectRoot, { actionPayload: params.actionPayload })];
+    }
+    return [proposalTool];
+  }
+
+  if (params.sessionKind === "interactive-film") {
+    if (isConfirmed("interactive_film_create")) {
+      return [createInteractiveFilmCreationTool(params.pipeline, params.projectRoot, { actionPayload: params.actionPayload })];
     }
     return [proposalTool];
   }

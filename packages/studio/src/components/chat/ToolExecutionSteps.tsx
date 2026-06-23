@@ -91,14 +91,22 @@ function extractResultPath(result: string | undefined, label: string): string | 
 }
 
 export interface GeneratedArtifactDetails {
-  readonly kind: "short_fiction_created" | "cover_generated";
+  readonly kind: "short_fiction_created" | "cover_generated" | "script_created" | "storyboard_created" | "interactive_film_created";
   readonly title?: string;
   readonly storyId?: string;
+  readonly projectId?: string;
   readonly finalMarkdownPath?: string;
   readonly salesPackagePath?: string;
   readonly coverPromptPath?: string;
   readonly coverImagePath?: string;
   readonly coverError?: string;
+  readonly specPath?: string;
+  readonly scriptPath?: string;
+  readonly storyboardPath?: string;
+  readonly storyTreePath?: string;
+  readonly flagsPath?: string;
+  readonly imagePromptsPath?: string;
+  readonly assetsManifestPath?: string;
 }
 
 export interface PlayToolDetails {
@@ -179,20 +187,79 @@ function proposedTargetRouteField(record: Record<string, unknown>): ProposedActi
 }
 
 export function getGeneratedArtifactDetails(exec: ToolExecution): GeneratedArtifactDetails | null {
-  if (!["short_fiction_run", "generate_cover"].includes(exec.tool)) return null;
+  if (!["short_fiction_run", "generate_cover", "script_create", "storyboard_create", "interactive_film_create"].includes(exec.tool)) return null;
   if (!exec.details || typeof exec.details !== "object") return null;
   const record = exec.details as Record<string, unknown>;
-  if (record.kind !== "short_fiction_created" && record.kind !== "cover_generated") return null;
+  if (
+    record.kind !== "short_fiction_created"
+    && record.kind !== "cover_generated"
+    && record.kind !== "script_created"
+    && record.kind !== "storyboard_created"
+    && record.kind !== "interactive_film_created"
+  ) return null;
   return {
     kind: record.kind,
     title: stringField(record, "title"),
     storyId: stringField(record, "storyId"),
+    projectId: stringField(record, "projectId"),
     finalMarkdownPath: stringField(record, "finalMarkdownPath"),
     salesPackagePath: stringField(record, "salesPackagePath"),
     coverPromptPath: stringField(record, "coverPromptPath"),
     coverImagePath: stringField(record, "coverImagePath"),
     coverError: stringField(record, "coverError"),
+    specPath: stringField(record, "specPath"),
+    scriptPath: stringField(record, "scriptPath"),
+    storyboardPath: stringField(record, "storyboardPath"),
+    storyTreePath: stringField(record, "storyTreePath"),
+    flagsPath: stringField(record, "flagsPath"),
+    imagePromptsPath: stringField(record, "imagePromptsPath"),
+    assetsManifestPath: stringField(record, "assetsManifestPath"),
   };
+}
+
+function ScriptStoryboardResultPreview({ exec }: { exec: ToolExecution }) {
+  const openProjectArtifact = useChatStore((s) => s.openProjectArtifact);
+  if (!["script_create", "storyboard_create", "interactive_film_create"].includes(exec.tool) || exec.status !== "completed") return null;
+  const details = getGeneratedArtifactDetails(exec);
+  if (!details || (
+    details.kind !== "script_created"
+    && details.kind !== "storyboard_created"
+    && details.kind !== "interactive_film_created"
+  )) return null;
+  const rows = [
+    details.specPath ? ["规格", details.specPath] as const : null,
+    details.storyTreePath ? ["剧情树", details.storyTreePath] as const : null,
+    details.flagsPath ? ["变量旗标", details.flagsPath] as const : null,
+    details.scriptPath ? ["剧本", details.scriptPath] as const : null,
+    details.storyboardPath ? ["分镜", details.storyboardPath] as const : null,
+    details.imagePromptsPath ? ["图像提示词", details.imagePromptsPath] as const : null,
+    details.assetsManifestPath ? ["图片资产", details.assetsManifestPath] as const : null,
+  ].filter((row): row is readonly [string, string] => Boolean(row));
+  if (rows.length === 0) return null;
+  return (
+    <div className="mx-3 mb-3 mt-1 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
+      <div className="text-[16px] leading-6 font-semibold text-primary">
+        {details.kind === "script_created" ? "剧本已生成" : details.kind === "storyboard_created" ? "分镜已生成" : "互动影游已生成"}
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {rows.map(([label, path]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => openProjectArtifact(path)}
+            className="group flex w-full items-start justify-between gap-3 rounded-lg border border-transparent px-2 py-1.5 text-left transition hover:border-primary/25 hover:bg-background/65"
+          >
+            <span className="min-w-0 text-[13px] leading-5 text-muted-foreground break-all">
+              <span className="font-medium text-foreground">{label}：</span>{path}
+            </span>
+            <span className="mt-0.5 shrink-0 rounded-md border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary opacity-80 transition group-hover:opacity-100">
+              查看
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ShortFictionResultPreview({ exec }: { exec: ToolExecution }) {
@@ -511,7 +578,18 @@ function PlayEditPreview({ exec }: { exec: ToolExecution }) {
 }
 
 function isPipelineTool(tool: string): boolean {
-  return tool === "sub_agent" || tool === "context_compression" || tool === "propose_action" || tool === "short_fiction_run" || tool === "generate_cover" || tool === "play_edit" || tool === "play_start" || tool === "play_revise" || tool === "play_step";
+  return tool === "sub_agent"
+    || tool === "context_compression"
+    || tool === "propose_action"
+    || tool === "short_fiction_run"
+    || tool === "script_create"
+    || tool === "storyboard_create"
+    || tool === "interactive_film_create"
+    || tool === "generate_cover"
+    || tool === "play_edit"
+    || tool === "play_start"
+    || tool === "play_revise"
+    || tool === "play_step";
 }
 
 // -- Live elapsed timer hook --
@@ -577,6 +655,7 @@ function PipelineExecution({
         onRejectProposedAction={onRejectProposedAction}
       />
       <ShortFictionResultPreview exec={exec} />
+      <ScriptStoryboardResultPreview exec={exec} />
       <PlayResultPreview exec={exec} />
       <PlayEditPreview exec={exec} />
       <CollapsibleContent>

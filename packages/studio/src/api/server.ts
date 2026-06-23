@@ -66,8 +66,11 @@ import {
   type ActionPayload,
   type ActionSource,
   createGenerateCoverTool,
+  createInteractiveFilmCreationTool,
   createPlayStartTool,
+  createScriptCreationTool,
   createShortFictionRunTool,
+  createStoryboardCreationTool,
   createSubAgentTool,
   type ResolvedModel,
   type PipelineConfig,
@@ -79,7 +82,7 @@ import {
   type SessionKind,
 } from "@actalk/inkos-core";
 import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { isSafeBookId } from "./safety.js";
 import { ApiError } from "./errors.js";
 import { buildStudioBookConfig } from "./book-create.js";
@@ -111,6 +114,9 @@ const TOOL_LABELS: Record<string, string> = {
   read: "读取文件", edit: "编辑文件", grep: "搜索", ls: "列目录",
   propose_action: "确认动作",
   short_fiction_run: "短篇生产",
+  script_create: "剧本创作",
+  storyboard_create: "分镜创作",
+  interactive_film_create: "互动影游",
   generate_cover: "生成封面",
   play_edit: "编辑互动世界",
   play_start: "启动互动世界",
@@ -250,6 +256,53 @@ function resolveProjectImageFile(root: string, rawPath: string): { readonly reso
     throw new ApiError(400, "INVALID_PROJECT_FILE_PATH", "Invalid project file path");
   }
   return { resolved, contentType };
+}
+
+function normalizeProjectGeneratedPath(root: string, rawPath: string, code: string): { readonly relPath: string; readonly resolved: string } {
+  let relPath: string;
+  try {
+    relPath = decodeURIComponent(rawPath).replace(/^\/+/u, "");
+  } catch {
+    throw new ApiError(400, code, "Invalid project artifact path");
+  }
+
+  if (
+    !relPath
+    || relPath.includes("\0")
+    || isAbsolute(relPath)
+    || relPath.split(/[\\/]+/u).includes("..")
+  ) {
+    throw new ApiError(400, code, "Invalid project artifact path");
+  }
+
+  const allowedRoots = ["dramas/", "storyboards/", "interactive-films/", "shorts/", "covers/"];
+  if (!allowedRoots.some((prefix) => relPath.startsWith(prefix))) {
+    throw new ApiError(400, code, "Only generated writing artifacts can be opened");
+  }
+
+  const resolved = resolve(root, relPath);
+  const rel = relative(root, resolved);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+    throw new ApiError(400, code, "Invalid project artifact path");
+  }
+
+  return { relPath, resolved };
+}
+
+function resolveProjectTextArtifactFile(root: string, rawPath: string): { readonly relPath: string; readonly resolved: string; readonly contentType: string } {
+  const file = normalizeProjectGeneratedPath(root, rawPath, "INVALID_PROJECT_ARTIFACT_PATH");
+  const ext = file.relPath.split(".").pop()?.toLowerCase() ?? "";
+  const contentTypes: Record<string, string> = {
+    md: "text/markdown; charset=utf-8",
+    markdown: "text/markdown; charset=utf-8",
+    txt: "text/plain; charset=utf-8",
+    json: "application/json; charset=utf-8",
+  };
+  const contentType = contentTypes[ext];
+  if (!contentType) {
+    throw new ApiError(415, "UNSUPPORTED_PROJECT_ARTIFACT_TYPE", "Unsupported project artifact type");
+  }
+  return { ...file, contentType };
 }
 
 function isLikelyFailedToolResult(exec: CollectedToolExec): boolean {
@@ -653,7 +706,12 @@ class ConfirmedActionExecutionError extends Error {
 }
 
 function suppressManualTextForTool(exec: CollectedToolExec): boolean {
-  return exec.tool === "play_start" || exec.tool === "play_step" || exec.tool === "play_revise";
+  return exec.tool === "play_start"
+    || exec.tool === "play_step"
+    || exec.tool === "play_revise"
+    || exec.tool === "script_create"
+    || exec.tool === "storyboard_create"
+    || exec.tool === "interactive_film_create";
 }
 
 function manualToolAssistantMessage(
@@ -698,8 +756,11 @@ function isConfirmedProductionAction(args: {
   return (args.actionSource === "button" || args.actionSource === "slash")
     && (
       args.requestedIntent === "create_book"
-      || args.requestedIntent === "short_run"
-      || args.requestedIntent === "play_start"
+    || args.requestedIntent === "short_run"
+    || args.requestedIntent === "script_create"
+    || args.requestedIntent === "storyboard_create"
+    || args.requestedIntent === "interactive_film_create"
+    || args.requestedIntent === "play_start"
       || args.requestedIntent === "generate_cover"
     );
 }
@@ -732,6 +793,9 @@ async function executeConfirmedProductionAction(args: {
   let tool: ReturnType<typeof createSubAgentTool>
     | ReturnType<typeof createShortFictionRunTool>
     | ReturnType<typeof createGenerateCoverTool>
+    | ReturnType<typeof createScriptCreationTool>
+    | ReturnType<typeof createStoryboardCreationTool>
+    | ReturnType<typeof createInteractiveFilmCreationTool>
     | ReturnType<typeof createPlayStartTool>;
   let params: Record<string, unknown>;
   let agent: string | undefined;
@@ -774,6 +838,60 @@ async function executeConfirmedProductionAction(args: {
       ...(payload?.sellingPoints ? { sellingPoints: payload.sellingPoints } : {}),
       ...(payload?.coverPrompt ? { coverPrompt: payload.coverPrompt } : {}),
       ...(payload?.outputDir ? { outputDir: payload.outputDir } : {}),
+    };
+  } else if (args.requestedIntent === "script_create") {
+    const payload = actionPayload?.scriptCreate;
+    const title = requirePayloadText(payload?.title, "确认创建剧本缺少标题，请重新生成确认卡。");
+    tool = createScriptCreationTool(args.pipeline, args.root, { actionPayload });
+    params = {
+      title,
+      instruction: args.instruction,
+      ...(payload?.sourceKind ? { sourceKind: payload.sourceKind } : {}),
+      ...(payload?.targetFormat ? { targetFormat: payload.targetFormat } : {}),
+      ...(payload?.sourceText ? { sourceText: payload.sourceText } : {}),
+      ...(payload?.sourcePath ? { sourcePath: payload.sourcePath } : {}),
+      ...(payload?.requirements ? { requirements: payload.requirements } : {}),
+      ...(payload?.episodeCount ? { episodeCount: payload.episodeCount } : {}),
+      ...(payload?.episodeDuration ? { episodeDuration: payload.episodeDuration } : {}),
+      ...(payload?.projectId ? { projectId: payload.projectId } : {}),
+      ...(payload?.outDir ? { outDir: payload.outDir } : {}),
+    };
+  } else if (args.requestedIntent === "storyboard_create") {
+    const payload = actionPayload?.storyboardCreate;
+    const title = requirePayloadText(payload?.title, "确认创建分镜缺少标题，请重新生成确认卡。");
+    tool = createStoryboardCreationTool(args.pipeline, args.root, { actionPayload });
+    params = {
+      title,
+      instruction: args.instruction,
+      ...(payload?.sourceKind ? { sourceKind: payload.sourceKind } : {}),
+      ...(payload?.sourceText ? { sourceText: payload.sourceText } : {}),
+      ...(payload?.sourcePath ? { sourcePath: payload.sourcePath } : {}),
+      ...(payload?.requirements ? { requirements: payload.requirements } : {}),
+      ...(payload?.visualStyle ? { visualStyle: payload.visualStyle } : {}),
+      ...(payload?.aspectRatio ? { aspectRatio: payload.aspectRatio } : {}),
+      ...(payload?.granularity ? { granularity: payload.granularity } : {}),
+      ...(payload?.maxShots ? { maxShots: payload.maxShots } : {}),
+      ...(payload?.projectId ? { projectId: payload.projectId } : {}),
+      ...(payload?.outDir ? { outDir: payload.outDir } : {}),
+    };
+  } else if (args.requestedIntent === "interactive_film_create") {
+    const payload = actionPayload?.interactiveFilmCreate;
+    const title = requirePayloadText(payload?.title, "确认创建互动影游缺少标题，请重新生成确认卡。");
+    tool = createInteractiveFilmCreationTool(args.pipeline, args.root, { actionPayload });
+    params = {
+      title,
+      instruction: args.instruction,
+      ...(payload?.sourceKind ? { sourceKind: payload.sourceKind } : {}),
+      ...(payload?.sourceText ? { sourceText: payload.sourceText } : {}),
+      ...(payload?.sourcePath ? { sourcePath: payload.sourcePath } : {}),
+      ...(payload?.requirements ? { requirements: payload.requirements } : {}),
+      ...(payload?.targetAudience ? { targetAudience: payload.targetAudience } : {}),
+      ...(payload?.episodeCount ? { episodeCount: payload.episodeCount } : {}),
+      ...(payload?.episodeDuration ? { episodeDuration: payload.episodeDuration } : {}),
+      ...(payload?.budget ? { budget: payload.budget } : {}),
+      ...(payload?.referenceMode ? { referenceMode: payload.referenceMode } : {}),
+      ...(payload?.projectId ? { projectId: payload.projectId } : {}),
+      ...(payload?.outDir ? { outDir: payload.outDir } : {}),
     };
   } else if (args.requestedIntent === "play_start") {
     const payload = actionPayload?.playStart;
@@ -2721,6 +2839,42 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
     }
   });
 
+  app.get("/api/v1/project/artifacts/:file{.+}", async (c) => {
+    const file = resolveProjectTextArtifactFile(root, c.req.param("file"));
+
+    try {
+      const content = await readFile(file.resolved, "utf-8");
+      return c.json({
+        path: file.relPath,
+        content,
+        contentType: file.contentType,
+        size: Buffer.byteLength(content, "utf-8"),
+      });
+    } catch {
+      return c.notFound();
+    }
+  });
+
+  app.put("/api/v1/project/artifacts/:file{.+}", async (c) => {
+    const file = resolveProjectTextArtifactFile(root, c.req.param("file"));
+    const body = await c.req.json<unknown>().catch(() => null);
+    const content = body && typeof body === "object" && "content" in body
+      ? (body as { readonly content?: unknown }).content
+      : undefined;
+    if (typeof content !== "string") {
+      throw new ApiError(400, "INVALID_PROJECT_ARTIFACT_BODY", "content must be a string");
+    }
+
+    await mkdir(dirname(file.resolved), { recursive: true });
+    await writeFile(file.resolved, content, "utf-8");
+    return c.json({
+      ok: true,
+      path: file.relPath,
+      contentType: file.contentType,
+      size: Buffer.byteLength(content, "utf-8"),
+    });
+  });
+
   // --- Config editing ---
 
   app.put("/api/v1/project", async (c) => {
@@ -3473,6 +3627,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           }
 
           const responseText = exec.result ?? "已完成。";
+          const responseForUser = suppressManualTextForTool(exec) ? "" : responseText;
           await appendManualSessionMessages(root, bookSession.sessionId, [
             manualToolAssistantMessage(
               responseText,
@@ -3484,7 +3639,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string) {
           await refreshBookSessionFromTranscript();
           broadcast("agent:complete", { instruction, activeBookId: createdBookId ?? agentBookId, sessionId: bookSession.sessionId, sessionKind });
           return c.json({
-            response: responseText,
+            response: responseForUser,
+            details: { toolExecutions: [exec] },
             session: {
               sessionId: bookSession.sessionId,
               sessionKind,
