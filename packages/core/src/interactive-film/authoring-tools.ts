@@ -1,5 +1,5 @@
 import type { StoryGraphDelta } from "./delta.js";
-import type { WorldAnchor, Variable, Ending, StoryNode } from "./graph-schema.js";
+import type { WorldAnchor, Variable, Ending, StoryNode, Character } from "./graph-schema.js";
 
 export function buildWorldAnchorDelta(patch: Partial<WorldAnchor>): StoryGraphDelta {
   return { worldAnchor: patch, notes: [] };
@@ -19,4 +19,8 @@ export function buildRemoveNodeDelta(nodeId: string): StoryGraphDelta {
 
 export function buildConnectChoiceDelta(node: StoryNode): StoryGraphDelta {
   return { nodes: { upsert: [node], remove: [] }, notes: [] };
+}
+
+export function buildUpsertCharactersDelta(chars: Character[]): StoryGraphDelta {
+  return { characters: { upsert: chars, remove: [] }, notes: [] };
 }
