@@ -25,6 +25,7 @@ async function withProjectLock<T>(key: string, fn: () => Promise<T>): Promise<T>
 export interface AuthoringState {
   readonly phase: "world" | "scale" | "structure" | "workshop";
   readonly rev: number;
+  readonly phaseRevs?: Record<string, number>;
 }
 
 const DEFAULT_STATE: AuthoringState = { phase: "world", rev: 0 };
@@ -52,6 +53,7 @@ export async function loadAuthoringState(
     return {
       phase,
       rev: typeof parsed.rev === "number" ? parsed.rev : DEFAULT_STATE.rev,
+      ...(parsed.phaseRevs !== undefined && { phaseRevs: parsed.phaseRevs as Record<string, number> }),
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return DEFAULT_STATE;
@@ -109,7 +111,7 @@ export async function applyGraphDelta(params: {
     await saveStoryGraph(params.projectRoot, params.projectId, graph);
 
     const nextRev = state.rev + 1;
-    const nextState: AuthoringState = { phase: params.phase ?? state.phase, rev: nextRev };
+    const nextState: AuthoringState = { phase: params.phase ?? state.phase, rev: nextRev, phaseRevs: state.phaseRevs };
     await mkdir(projectDir(params.projectRoot, params.projectId), { recursive: true });
     await writeFile(
       authoringStatePath(params.projectRoot, params.projectId),
@@ -130,4 +132,18 @@ export async function revertToSnapshot(params: {
   const graph = StoryGraphSchema.parse(JSON.parse(raw));
   await saveStoryGraph(params.projectRoot, params.projectId, graph);
   return graph;
+}
+
+export async function recordPhaseVisit(
+  projectRoot: string,
+  projectId: string,
+  phase: string,
+): Promise<void> {
+  const state = await loadAuthoringState(projectRoot, projectId);
+  const next: AuthoringState = {
+    ...state,
+    phaseRevs: { ...(state.phaseRevs ?? {}), [phase]: state.rev },
+  };
+  await mkdir(projectDir(projectRoot, projectId), { recursive: true });
+  await writeFile(authoringStatePath(projectRoot, projectId), JSON.stringify(next, null, 2), "utf-8");
 }
