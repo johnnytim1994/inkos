@@ -136,6 +136,24 @@ export {
   RuleStackSchema,
   ChapterTraceSchema,
 } from "./models/input-governance.js";
+export {
+  BUILTIN_CAPABILITY_SKILLS,
+  CapabilitySkillManifestSchema,
+  PromptPackManifestSchema,
+  SkillContextNeedSchema,
+  SkillContextRetrievalSchema,
+  SkillContextTierSchema,
+  createSkillRegistry,
+  type CapabilitySkillManifest,
+  type CreateSkillRegistryOptions,
+  type PromptPackManifest,
+  type SkillContextNeed,
+  type SkillContextRetrieval,
+  type SkillContextTier,
+  type SkillRegistry,
+  type SkillResolutionInput,
+  type SkillResolutionResult,
+} from "./skills/index.js";
 export { PlannerAgent, type PlanChapterInput, type PlanChapterOutput } from "./agents/planner.js";
 export {
   ComposerAgent,
