@@ -692,4 +692,107 @@ describe("chat message actions", () => {
     expect(fakeEventSources[1]?.closed).toBe(false);
     expect(store.getState().sessions[sessionId]).toMatchObject({ isStreaming: true });
   });
+
+  function findChatToolExecution(store: ReturnType<typeof createTestStore>, sessionId: string) {
+    return (store.getState().sessions[sessionId]?.messages ?? [])
+      .flatMap((message) => message.toolExecutions ?? [])
+      .find((execution) => execution.id === "chat-tool-1");
+  }
+
+  it("routes executionId-tagged logs to the task card while untagged logs follow the latest running card", async () => {
+    const store = createTestStore();
+    const sessionId = await setupRunningTaskSession(store);
+
+    let resolveAgent!: (value: unknown) => void;
+    fetchJson.mockClear();
+    fetchJson.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveAgent = resolve;
+    }));
+    const sent = store.getState().sendMessage(sessionId, "顺便审一下最新章节");
+    await vi.waitFor(() => expect(fakeEventSources).toHaveLength(2));
+
+    // 聊天轮启动了自己的工具卡：它成为"最近一张运行中的卡"
+    fakeEventSources[1]?.emit("tool:start", {
+      sessionId,
+      id: "chat-tool-1",
+      tool: "sub_agent",
+      args: { agent: "auditor" },
+    });
+
+    // 带 executionId 的任务日志：附加到更早消息里的任务卡，而不是最新运行中的卡
+    fakeEventSources[1]?.emit("log", {
+      sessionId,
+      executionId: "direct-short_run-1",
+      level: "info",
+      tag: "studio",
+      message: "第 2 章草稿完成",
+    });
+    // 不带 executionId 的日志：维持现有回退，附加到最新运行中的聊天工具卡
+    fakeEventSources[1]?.emit("log", {
+      sessionId,
+      level: "info",
+      tag: "studio",
+      message: "审稿进行中",
+    });
+
+    expect(findTaskExecution(store, sessionId)?.logs).toEqual(["第 2 章草稿完成"]);
+    expect(findChatToolExecution(store, sessionId)?.logs).toEqual(["审稿进行中"]);
+
+    resolveAgent({ response: "审完了。", session: { sessionId, sessionKind: "short" } });
+    await sent;
+  });
+
+  it("routes executionId-tagged llm progress to the task card's active stage", async () => {
+    const store = createTestStore();
+    const sessionId = await setupRunningTaskSession(store);
+
+    // 服务端快照重放会带 stages：给任务卡一个 active 阶段
+    fakeEventSources[0]?.emit("task:snapshot", {
+      sessionId,
+      execution: {
+        id: "direct-short_run-1",
+        tool: "short_fiction_run",
+        label: "短篇生产",
+        status: "running",
+        startedAt: 10,
+        stages: [{ label: "撰写正文", status: "active" }],
+      },
+    });
+
+    let resolveAgent!: (value: unknown) => void;
+    fetchJson.mockClear();
+    fetchJson.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveAgent = resolve;
+    }));
+    const sent = store.getState().sendMessage(sessionId, "顺便聊两句");
+    await vi.waitFor(() => expect(fakeEventSources).toHaveLength(2));
+    fakeEventSources[1]?.emit("tool:start", {
+      sessionId,
+      id: "chat-tool-1",
+      tool: "sub_agent",
+      args: { agent: "auditor" },
+      stages: ["审稿"],
+    });
+
+    fakeEventSources[1]?.emit("llm:progress", {
+      sessionId,
+      executionId: "direct-short_run-1",
+      status: "写作中",
+      elapsedMs: 1200,
+      totalChars: 800,
+      chineseChars: 640,
+    });
+
+    // 带 executionId 的进度精确写进任务卡的 active 阶段
+    expect(findTaskExecution(store, sessionId)?.stages?.[0]?.progress).toMatchObject({
+      elapsedMs: 1200,
+      totalChars: 800,
+      chineseChars: 640,
+    });
+    // 最新运行中的聊天工具卡没有被任务进度污染
+    expect(findChatToolExecution(store, sessionId)?.stages?.[0]?.progress).toBeUndefined();
+
+    resolveAgent({ response: "聊完了。", session: { sessionId, sessionKind: "short" } });
+    await sent;
+  });
 });

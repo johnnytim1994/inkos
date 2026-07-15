@@ -59,8 +59,19 @@ interface StreamProgressEventData {
   readonly chineseChars: number;
 }
 
+interface ProgressThrottle {
+  enqueue(event: StreamProgressEventData): void;
+  flush(): void;
+}
+
 function numberOrZero(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/** 服务端给后台生产任务的进度事件附加的 execution id；聊天轮事件不带。 */
+function eventExecutionId(data: unknown): string | undefined {
+  const executionId = (data as { executionId?: unknown } | null)?.executionId;
+  return typeof executionId === "string" && executionId ? executionId : undefined;
 }
 
 export function applyStreamTextDeltas(
@@ -238,32 +249,52 @@ export function attachSessionStreamListeners({
 
   const flushTextDeltas = () => textDeltaBatcher.flush();
 
-  const progressThrottle = createLatestEventThrottle<StreamProgressEventData>((data) => {
-    set((state) => ({
-      sessions: updateSession(state.sessions, sessionId, (runtime) => {
-        const messages = updateLatestRunningToolMessage(runtime.messages, (execution) => {
-          if (!execution.stages) return null;
-          return {
-            ...execution,
-            stages: execution.stages.map((stage) =>
-              stage.status === "active"
-                ? {
-                    ...stage,
-                    progress: {
-                      status: data.status,
-                      elapsedMs: data.elapsedMs,
-                      totalChars: data.totalChars,
-                      chineseChars: data.chineseChars,
-                    },
-                  }
-                : stage,
-            ),
-          };
-        });
-        return messages ? { messages } : {};
-      }),
-    }));
+  const applyStageProgress = (execution: ToolExecution, data: StreamProgressEventData): ToolExecution => ({
+    ...execution,
+    stages: execution.stages?.map((stage) =>
+      stage.status === "active"
+        ? {
+            ...stage,
+            progress: {
+              status: data.status,
+              elapsedMs: data.elapsedMs,
+              totalChars: data.totalChars,
+              chineseChars: data.chineseChars,
+            },
+          }
+        : stage,
+    ),
   });
+
+  // llm:progress 按事件里的 executionId 路由：带 id 的事件（后台生产任务）按 id
+  // 精确定位工具卡；不带 id 的维持"最近一张运行中的卡"回退（聊天轮工具与旧版
+  // 事件）。每个 id 一个独立节流器：任务与聊天并行时，双方进度不会在同一个
+  // "只保留最新事件"的节流器里互相覆盖。
+  const progressThrottles = new Map<string, ProgressThrottle>();
+  const progressThrottleFor = (executionId: string | undefined): ProgressThrottle => {
+    const key = executionId ?? "";
+    const existing = progressThrottles.get(key);
+    if (existing) return existing;
+    const throttle = createLatestEventThrottle<StreamProgressEventData>((data) => {
+      set((state) => ({
+        sessions: updateSession(state.sessions, sessionId, (runtime) => {
+          const messages = executionId
+            ? updateToolPartById(runtime.messages, executionId, (execution) => (
+                execution.stages ? applyStageProgress(execution, data) : execution
+              ))
+            : updateLatestRunningToolMessage(runtime.messages, (execution) => (
+                execution.stages ? applyStageProgress(execution, data) : null
+              ));
+          return messages ? { messages } : {};
+        }),
+      }));
+    });
+    progressThrottles.set(key, throttle);
+    return throttle;
+  };
+  const flushProgressThrottles = () => {
+    for (const throttle of progressThrottles.values()) throttle.flush();
+  };
 
   streamEs.addEventListener("draft:complete", flushTextDeltas);
   streamEs.addEventListener("draft:error", flushTextDeltas);
@@ -280,7 +311,7 @@ export function attachSessionStreamListeners({
       const data = event.data ? JSON.parse(event.data) : null;
       if (!sessionMatchesEvent(sessionId, data)) return;
       flushTextDeltas();
-      progressThrottle.flush();
+      flushProgressThrottles();
       const runtime = get().sessions[sessionId];
       if (!runtime || runtime.isChatStreaming) return;
       if (hasAnyInFlightExecution(runtime.messages)) return;
@@ -450,7 +481,7 @@ export function attachSessionStreamListeners({
       const data = event.data ? JSON.parse(event.data) : null;
       if (!sessionMatchesEvent(sessionId, data) || !data?.tool) return;
       flushTextDeltas();
-      progressThrottle.flush();
+      flushProgressThrottles();
       set((state) => ({
         sessions: updateSession(state.sessions, sessionId, (runtime) => {
           // 按 execution id 全量定位：并行聊天时任务卡在更早的消息里
@@ -487,13 +518,20 @@ export function attachSessionStreamListeners({
       if (!sessionMatchesEvent(sessionId, data)) return;
       const message = data?.message as string | undefined;
       if (!message) return;
+      const executionId = eventExecutionId(data);
       flushTextDeltas();
       set((state) => ({
         sessions: updateSession(state.sessions, sessionId, (runtime) => {
-          const messages = updateLatestRunningToolMessage(runtime.messages, (execution) => ({
+          const appendLog = (execution: ToolExecution): ToolExecution => ({
             ...execution,
             logs: appendBoundedToolLogs(execution.logs, [message]),
-          }));
+          });
+          // 带 executionId 的日志（后台生产任务）按 id 精确定位工具卡；卡还没
+          // 出现时直接丢弃这条（任务快照重放会带回累积的 logs），不能回退到
+          // "最近一张运行中的卡"——那会把任务日志串排进并行聊天轮的工具卡。
+          const messages = executionId
+            ? updateToolPartById(runtime.messages, executionId, appendLog)
+            : updateLatestRunningToolMessage(runtime.messages, appendLog);
           return messages ? { messages } : {};
         }),
       }));
@@ -507,7 +545,7 @@ export function attachSessionStreamListeners({
       const data = event.data ? JSON.parse(event.data) : null;
       if (!sessionMatchesEvent(sessionId, data)) return;
       flushTextDeltas();
-      progressThrottle.enqueue({
+      progressThrottleFor(eventExecutionId(data)).enqueue({
         status: typeof data.status === "string" ? data.status : undefined,
         elapsedMs: numberOrZero(data.elapsedMs),
         totalChars: numberOrZero(data.totalChars),

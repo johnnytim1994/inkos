@@ -3495,6 +3495,155 @@ describe("createStudioServer daemon lifecycle", () => {
     await pendingTask;
   });
 
+  it("tags task pipeline log broadcasts with the execution id while chat round logs stay untagged", async () => {
+    let resolveInitBook!: () => void;
+    initBookMock.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resolveInitBook = resolve;
+    }));
+    loadBookSessionMock.mockResolvedValue({
+      sessionId: "tagged-log-session",
+      bookId: null,
+      sessionKind: "book-create",
+      title: null,
+      messages: [],
+      events: [],
+      draftRounds: [],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const core = await import("@actalk/inkos-core");
+    const { createStudioServer } = await import("./server.js");
+    const app = createStudioServer(cloneProjectConfig() as never, root);
+
+    // 通过 /api/v1/events 订阅 SSE，收集服务端 broadcast 出来的事件。
+    const sseResponse = await app.request("http://localhost/api/v1/events");
+    const sseEvents: Array<{ event: string; data: Record<string, unknown> | null }> = [];
+    const sseReader = sseResponse.body!.getReader();
+    const ssePump = (async () => {
+      const decoder = new TextDecoder();
+      let buffer = "";
+      try {
+        for (;;) {
+          const { done, value } = await sseReader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let frameEnd = buffer.indexOf("\n\n");
+          while (frameEnd !== -1) {
+            const lines = buffer.slice(0, frameEnd).split("\n");
+            buffer = buffer.slice(frameEnd + 2);
+            const eventName = lines.find((line) => line.startsWith("event:"))?.slice("event:".length).trim();
+            const dataRaw = lines.find((line) => line.startsWith("data:"))?.slice("data:".length).trim();
+            if (eventName) {
+              sseEvents.push({ event: eventName, data: dataRaw ? JSON.parse(dataRaw) as Record<string, unknown> : null });
+            }
+            frameEnd = buffer.indexOf("\n\n");
+          }
+        }
+      } catch {
+        // abort 断开 SSE 连接时 read 会抛错，这是本测试收尾的正常关闭路径
+      }
+    })();
+    await vi.waitFor(() => expect(sseEvents.some((entry) => entry.event === "ping")).toBe(true));
+
+    // 把最近一次 buildPipelineConfig 传给 createLogger 的每个 sink 各写一条日志，
+    // 模拟 pipeline 运行期间经 logger 广播日志的真实路径（createLogger 本身被
+    // mock 成不分发，所以直接写 sink）。
+    const emitLatestPipelineLog = (message: string) => {
+      const createLoggerArgs = vi.mocked(core.createLogger).mock.calls.at(-1)?.[0] as
+        | { sinks?: ReadonlyArray<{ write: (entry: { level: "info"; tag: string; message: string }) => void }> }
+        | undefined;
+      expect(createLoggerArgs?.sinks?.length ?? 0).toBeGreaterThan(0);
+      for (const sink of createLoggerArgs!.sinks!) {
+        sink.write({ level: "info", tag: "studio", message });
+      }
+    };
+    const findLogEvent = (message: string) =>
+      sseEvents.find((entry) => entry.event === "log" && entry.data?.message === message);
+
+    const pendingTask = app.request("http://localhost/api/v1/agent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instruction: "创建《日志打标验证》。",
+        sessionId: "tagged-log-session",
+        sessionKind: "book-create",
+        actionSource: "button",
+        requestedIntent: "create_book",
+        actionPayload: { createBook: { title: "日志打标验证", language: "zh" } },
+      }),
+    });
+    await vi.waitFor(async () => {
+      const task = await loadStudioTaskSnapshot(root, "tagged-log-session");
+      expect(task?.execution.status).toBe("running");
+    });
+    const runningTask = await loadStudioTaskSnapshot(root, "tagged-log-session");
+    const executionId = runningTask!.execution.id;
+    expect(executionId).toMatch(/^direct-create_book-/);
+
+    // 任务运行期间：任务 pipeline 广播的 log 与 llm:progress 都带任务的 execution id
+    emitLatestPipelineLog("任务运行中的日志");
+    (pipelineConfigs.at(-1) as {
+      onStreamProgress?: (progress: { status: string; elapsedMs: number; totalChars: number; chineseChars: number }) => void;
+    }).onStreamProgress?.({ status: "writing", elapsedMs: 1200, totalChars: 800, chineseChars: 640 });
+    await vi.waitFor(() => expect(findLogEvent("任务运行中的日志")).toBeDefined());
+    expect(findLogEvent("任务运行中的日志")?.data).toMatchObject({
+      sessionId: "tagged-log-session",
+      executionId,
+    });
+    await vi.waitFor(() => expect(sseEvents.some((entry) => entry.event === "llm:progress")).toBe(true));
+    expect(sseEvents.find((entry) => entry.event === "llm:progress")?.data).toMatchObject({
+      sessionId: "tagged-log-session",
+      executionId,
+    });
+
+    // 任务运行期间的并行聊天轮：聊天 pipeline 广播的日志只带 sessionId，不带任务 id
+    runAgentSessionMock.mockImplementationOnce(async () => {
+      emitLatestPipelineLog("并行聊天轮的日志");
+      return { responseText: "任务还在后台跑。", messages: [] };
+    });
+    const chatDuringTask = await app.request("http://localhost/api/v1/agent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instruction: "现在在写吗？",
+        sessionId: "tagged-log-session",
+        sessionKind: "book-create",
+      }),
+    });
+    expect(chatDuringTask.status).toBe(200);
+    await vi.waitFor(() => expect(findLogEvent("并行聊天轮的日志")).toBeDefined());
+    const parallelChatLog = findLogEvent("并行聊天轮的日志")!.data!;
+    expect(parallelChatLog.sessionId).toBe("tagged-log-session");
+    expect(parallelChatLog.executionId).toBeUndefined();
+
+    resolveInitBook();
+    const taskResponse = await pendingTask;
+    expect(taskResponse.status).toBe(200);
+
+    // 任务结束后：同会话新一轮聊天的日志同样不带已结束任务的 execution id
+    runAgentSessionMock.mockImplementationOnce(async () => {
+      emitLatestPipelineLog("任务结束后的日志");
+      return { responseText: "任务已经完成。", messages: [] };
+    });
+    const chatAfterTask = await app.request("http://localhost/api/v1/agent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instruction: "刚才那个任务怎么样了？",
+        sessionId: "tagged-log-session",
+        sessionKind: "book-create",
+      }),
+    });
+    expect(chatAfterTask.status).toBe(200);
+    await vi.waitFor(() => expect(findLogEvent("任务结束后的日志")).toBeDefined());
+    expect(findLogEvent("任务结束后的日志")!.data!.executionId).toBeUndefined();
+
+    // 取消 body reader 会触发 hono 流的 abort（Node 下请求 signal 不会），
+    // 由它清掉 keepAlive 定时器并把订阅者从 broadcast 集合移除。
+    await sseReader.cancel();
+    await ssePump;
+  }, 60_000);
+
   it("aborts only the chat round when scope=chat and leaves the production task controller alive", async () => {
     let resolveRun!: () => void;
     let capturedSignal: AbortSignal | undefined;

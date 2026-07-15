@@ -2757,6 +2757,11 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
     overrides?: Partial<Pick<PipelineConfig, "externalContext" | "client" | "model">> & {
       readonly currentConfig?: ProjectConfig;
       readonly sessionIdForSSE?: string;
+      // 确认式生产任务的 execution id。给任务构建 pipeline 时传入，该 pipeline
+      // 广播的 log / llm:progress / context:compression 事件都会带上 executionId，
+      // 前端据此把事件精确附加到任务卡；同会话聊天轮构建的 pipeline 不传，
+      // 事件维持只带 sessionId，走"最近一张运行中卡"的回退。
+      readonly executionIdForSSE?: string;
       readonly bookIdForSettings?: string;
     },
   ): Promise<PipelineConfig> {
@@ -2765,11 +2770,15 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
     const chapterReviewMode = await resolveBookChapterReviewMode(root, overrides?.bookIdForSettings, projectReviewMode);
     const projectRevisionGate = readProjectRevisionGate(currentConfig as unknown as Record<string, unknown>);
     const revisionGate = await resolveBookRevisionGate(root, overrides?.bookIdForSettings, projectRevisionGate);
+    const sseExecutionTag = overrides?.executionIdForSSE
+      ? { executionId: overrides.executionIdForSSE }
+      : {};
     const scopedSseSink: LogSink = overrides?.sessionIdForSSE
       ? {
           write(entry) {
             broadcast("log", {
               sessionId: overrides.sessionIdForSSE,
+              ...sseExecutionTag,
               level: entry.level,
               tag: entry.tag,
               message: entry.message,
@@ -2793,12 +2802,14 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
       onContextCompression: (event) => {
         broadcast("context:compression", {
           ...(overrides?.sessionIdForSSE ? { sessionId: overrides.sessionIdForSSE } : {}),
+          ...sseExecutionTag,
           ...event,
         });
       },
       onStreamProgress: (progress) => {
         broadcast("llm:progress", {
           ...(overrides?.sessionIdForSSE ? { sessionId: overrides.sessionIdForSSE } : {}),
+          ...sseExecutionTag,
           status: progress.status,
           elapsedMs: progress.elapsedMs,
           totalChars: progress.totalChars,
@@ -4660,14 +4671,6 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
             baseUrl: configuredEntry?.baseUrl ?? "",
           } as any)
         : client;
-      const pipeline = new PipelineRunner(await buildPipelineConfig({
-        client: pipelineClient,
-        model: reqModel ?? config.llm.model,
-        currentConfig: config,
-        sessionIdForSSE: bookSession.sessionId,
-        bookIdForSettings: activeBookId ?? undefined,
-      }));
-
       // 确认式生产任务的 intent：写下一章的各种触发方式（quick-action 按钮、
       // free-text 明确写章命令、写作指令启发式）统一归一成 write_next，与其它
       // button/slash 确认的生产 intent 走同一条任务分支，获得 taskId、
@@ -4677,8 +4680,22 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
         : requestedIntent && isConfirmedProductionAction({ actionSource, requestedIntent })
           ? requestedIntent
           : undefined;
+      // 任务的 execution id 在构建 pipeline 之前生成并传入 executionIdForSSE：
+      // 该 pipeline 广播的进度事件（log / llm:progress / context:compression）
+      // 由此带上任务 id。同会话并行聊天轮的 pipeline 是另一次请求单独构建的、
+      // 不带这个 id，前端才能把任务日志与聊天轮工具日志分开归属。
+      const confirmedTaskId = confirmedIntent ? `direct-${confirmedIntent}-${randomUUID()}` : undefined;
 
-      if (confirmedIntent) {
+      const pipeline = new PipelineRunner(await buildPipelineConfig({
+        client: pipelineClient,
+        model: reqModel ?? config.llm.model,
+        currentConfig: config,
+        sessionIdForSSE: bookSession.sessionId,
+        bookIdForSettings: activeBookId ?? undefined,
+        ...(confirmedTaskId ? { executionIdForSSE: confirmedTaskId } : {}),
+      }));
+
+      if (confirmedIntent && confirmedTaskId) {
         const productionTaskBusyResponse = () => {
           const message = pick(
             surfaceLanguage,
@@ -4702,7 +4719,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
         }
         reservedProductionSessions.add(reservedSessionId);
 
-        const taskId = `direct-${confirmedIntent}-${randomUUID()}`;
+        const taskId = confirmedTaskId;
         const taskController = new AbortController();
         activeConfirmedTasks.set(taskId, taskController);
         let pendingBookId: string | null = null;
