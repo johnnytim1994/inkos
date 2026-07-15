@@ -146,7 +146,9 @@ async function collectEditableFiles(dir: string): Promise<ReadonlyArray<string>>
   const files = await Promise.all(entries.map(async (entry) => {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "snapshots") return [];
+      // Snapshots are frozen history; dot-directories (e.g. chapters/.trash)
+      // hold discarded content — neither may be rewritten by edits.
+      if (entry.name === "snapshots" || entry.name.startsWith(".")) return [];
       return collectEditableFiles(fullPath);
     }
     if (!/\.(md|json|ya?ml|txt)$/i.test(entry.name)) {

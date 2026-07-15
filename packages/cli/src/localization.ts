@@ -477,3 +477,35 @@ export function formatChapterSyncMissingFiles(language: CliLanguage, numbers: Re
     en: `Warning: chapter(s) ${numbers.join(", ")} exist in index.json but have no chapter file on disk; skipped.`,
   });
 }
+
+export function formatChapterDeleteConfirm(
+  language: CliLanguage,
+  params: { bookTitle: string; bookId: string; number: number; title: string },
+): string {
+  return localize(language, {
+    zh: `将删除《${params.bookTitle}》(${params.bookId}) 的最新章：第${params.number}章 ${params.title}。`
+      + `章节文件会移入 chapters/.trash/，索引和故事状态回滚到第${params.number - 1}章。确认删除？(y/N) `,
+    en: `Delete the latest chapter of "${params.bookTitle}" (${params.bookId}): chapter ${params.number} ${params.title}? `
+      + `The chapter file moves to chapters/.trash/ and the index and story state roll back to chapter ${params.number - 1}. (y/N) `,
+  });
+}
+
+export function formatChapterDeleteCancelled(language: CliLanguage): string {
+  return localize(language, {
+    zh: "已取消。",
+    en: "Cancelled.",
+  });
+}
+
+export function formatChapterDeleteDone(
+  language: CliLanguage,
+  params: { number: number; title: string; trashedFiles: ReadonlyArray<string>; rolledBackTo: number },
+): string {
+  const trashNote = params.trashedFiles.length > 0
+    ? params.trashedFiles.join(", ")
+    : localize(language, { zh: "（章节文件已不存在，未移动）", en: "(chapter file was already gone; nothing moved)" });
+  return localize(language, {
+    zh: `已删除第${params.number}章 ${params.title}：章节文件保留在 ${trashNote}，索引和故事状态已回滚到第${params.rolledBackTo}章。`,
+    en: `Deleted chapter ${params.number} ${params.title}: chapter file kept at ${trashNote}; index and story state rolled back to chapter ${params.rolledBackTo}.`,
+  });
+}

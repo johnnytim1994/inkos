@@ -141,6 +141,32 @@ describe("edit controller", () => {
     expect(result.touchedFiles.length).toBeGreaterThan(0);
   });
 
+  it("does not rewrite trashed chapters during entity rename", async () => {
+    const bookDir = join(projectRoot, "books", "trashbook");
+    await mkdir(join(bookDir, "story"), { recursive: true });
+    await mkdir(join(bookDir, "chapters", ".trash"), { recursive: true });
+    await writeFile(join(bookDir, "story", "story_bible.md"), "主角陆尘住在港口。", "utf-8");
+    await writeFile(join(bookDir, "chapters", ".trash", "0009_旧章.md"), "陆尘在被删除的章节里。", "utf-8");
+
+    await executeEditTransaction(
+      {
+        bookDir: (bookId) => join(projectRoot, "books", bookId),
+        loadChapterIndex: async () => [],
+        saveChapterIndex: async () => undefined,
+      },
+      {
+        kind: "entity-rename",
+        bookId: "trashbook",
+        entityType: "protagonist",
+        oldValue: "陆尘",
+        newValue: "林砚",
+      },
+    );
+
+    await expect(readFile(join(bookDir, "story", "story_bible.md"), "utf-8")).resolves.toContain("林砚");
+    await expect(readFile(join(bookDir, "chapters", ".trash", "0009_旧章.md"), "utf-8")).resolves.toContain("陆尘");
+  });
+
   it("does not rewrite story snapshots during entity rename", async () => {
     const bookDir = join(projectRoot, "books", "harbor");
     await writeFile(join(bookDir, "story", "story_bible.md"), "主角陆尘住在港口。", "utf-8");
