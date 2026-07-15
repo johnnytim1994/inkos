@@ -263,6 +263,21 @@ describe("buildPartsFromEvents", () => {
     expect(parts[3].type === "tool" ? parts[3].execution.label : "").toBe("重做互动回合");
   });
 
+  it("labels narrative forecast tools as first-class planning actions", () => {
+    const parts = buildPartsFromEvents([
+      { type: "tool:start", id: "f1", tool: "create_narrative_forecast" },
+      { type: "tool:end", id: "f1", result: "created" },
+      { type: "tool:start", id: "f2", tool: "get_narrative_forecast" },
+      { type: "tool:end", id: "f2", result: "fresh" },
+      { type: "tool:start", id: "f3", tool: "select_narrative_branch" },
+      { type: "tool:end", id: "f3", result: "selected" },
+    ]);
+
+    expect(parts[0].type === "tool" ? parts[0].execution.label : "").toBe("剧情多线推演");
+    expect(parts[1].type === "tool" ? parts[1].execution.label : "").toBe("核验剧情推演");
+    expect(parts[2].type === "tool" ? parts[2].execution.label : "").toBe("采用候选分支");
+  });
+
   it("does not render model narration after a completed play tool as authoritative text", () => {
     const parts = buildPartsFromEvents([
       { type: "tool:start", id: "p1", tool: "play_step" },

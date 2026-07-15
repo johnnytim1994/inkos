@@ -192,7 +192,12 @@ vi.mock("@mariozechner/pi-ai", async () => {
   };
 });
 
-import { abortAgentSession, runAgentSession, evictAgentCache } from "../agent/agent-session.js";
+import {
+  abortAgentSession,
+  evictAgentCache,
+  isTerminalProductionToolName,
+  runAgentSession,
+} from "../agent/agent-session.js";
 import {
   appendManualSessionMessages,
   appendTranscriptEvent,
@@ -761,6 +766,12 @@ describe("runAgentSession cache — bookId switch", () => {
         expect.objectContaining({ role: "toolResult", toolName: "sub_agent" }),
       ]),
     );
+  });
+
+  it("treats narrative forecast cards as terminal tool answers", () => {
+    expect(isTerminalProductionToolName("create_narrative_forecast")).toBe(true);
+    expect(isTerminalProductionToolName("get_narrative_forecast")).toBe(true);
+    expect(isTerminalProductionToolName("select_narrative_branch")).toBe(true);
   });
 
   it("treats play revise results as terminal instead of asking the model for extra prose", async () => {

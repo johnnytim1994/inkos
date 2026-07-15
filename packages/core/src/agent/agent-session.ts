@@ -364,7 +364,7 @@ function localAssistantStopStream(model: Model<Api>): AssistantMessageEventStrea
   return stream;
 }
 
-function isTerminalProductionToolName(toolName: unknown): boolean {
+export function isTerminalProductionToolName(toolName: unknown): boolean {
   return toolName === "propose_action"
     || toolName === "sub_agent"
     || toolName === "short_fiction_run"
@@ -375,7 +375,10 @@ function isTerminalProductionToolName(toolName: unknown): boolean {
     || toolName === "play_start"
     || toolName === "play_edit"
     || toolName === "play_revise"
-    || toolName === "play_step";
+    || toolName === "play_step"
+    || toolName === "create_narrative_forecast"
+    || toolName === "get_narrative_forecast"
+    || toolName === "select_narrative_branch";
 }
 
 function hasUnansweredTerminalToolResult(messages: AgentMessage[]): boolean {

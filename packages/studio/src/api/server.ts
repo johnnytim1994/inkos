@@ -208,6 +208,9 @@ const TOOL_LABELS: Record<string, BilingualLabel> = {
   play_start: { zh: "启动互动世界", en: "Start interactive world" },
   play_revise: { zh: "重做互动回合", en: "Redo interactive turn" },
   play_step: { zh: "推进互动世界", en: "Advance interactive world" },
+  create_narrative_forecast: { zh: "剧情多线推演", en: "Narrative forecast" },
+  get_narrative_forecast: { zh: "核验剧情推演", en: "Recheck forecast" },
+  select_narrative_branch: { zh: "采用候选分支", en: "Select candidate branch" },
 };
 
 function resolveToolLabel(tool: string, agent?: string, lang: StudioLanguage = "zh"): string {

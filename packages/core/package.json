@@ -32,6 +32,10 @@
     "./interactive-film/graph-schema": {
       "types": "./dist/interactive-film/graph-schema.d.ts",
       "import": "./dist/interactive-film/graph-schema.js"
+    },
+    "./forecast/schema": {
+      "types": "./dist/forecast/schema.d.ts",
+      "import": "./dist/forecast/schema.js"
     }
   },
   "files": [

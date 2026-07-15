@@ -47,6 +47,9 @@ const TOOL_LABELS: Record<string, readonly [string, string]> = {
   play_start: ["启动互动世界", "Start interactive world"],
   play_revise: ["重做互动回合", "Redo play turn"],
   play_step: ["推进互动世界", "Advance interactive world"],
+  create_narrative_forecast: ["剧情多线推演", "Narrative forecast"],
+  get_narrative_forecast: ["核验剧情推演", "Recheck forecast"],
+  select_narrative_branch: ["采用候选分支", "Select candidate branch"],
 };
 
 function resolveToolLabel(tool: string, agent?: string): string {

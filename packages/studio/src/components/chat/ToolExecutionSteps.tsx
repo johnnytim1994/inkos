@@ -17,6 +17,10 @@ import { buildApiUrl } from "../../hooks/use-api";
 import { tr } from "../../lib/app-language";
 import { chatSelectors, useChatStore } from "../../store/chat";
 import { usePreferencesStore } from "../../store/preferences";
+import {
+  NarrativeForecastPreview,
+  getNarrativeForecastPreviewDetails,
+} from "./NarrativeForecastPreview";
 
 // -- Status rendering helpers --
 
@@ -616,7 +620,10 @@ function isPipelineTool(tool: string): boolean {
     || tool === "play_edit"
     || tool === "play_start"
     || tool === "play_revise"
-    || tool === "play_step";
+    || tool === "play_step"
+    || tool === "create_narrative_forecast"
+    || tool === "get_narrative_forecast"
+    || tool === "select_narrative_branch";
 }
 
 // -- Live elapsed timer hook --
@@ -662,11 +669,15 @@ function PipelineExecution({
   onProposedAction,
   onRejectProposedAction,
   onOpenFilmStudio,
+  onSelectNarrativeBranch,
+  onRecheckNarrativeForecast,
 }: {
   exec: ToolExecution;
   onProposedAction?: (details: ProposedActionDetails) => void;
   onRejectProposedAction?: (details: ProposedActionDetails) => void;
   onOpenFilmStudio?: (projectId: string) => void;
+  onSelectNarrativeBranch?: (forecastId: string, branchId: string) => void | Promise<void>;
+  onRecheckNarrativeForecast?: (forecastId: string) => void | Promise<void>;
 }) {
   const isActive = exec.status === "running" || exec.status === "processing";
   const [open, setOpen] = useState(isActive);
@@ -682,6 +693,7 @@ function PipelineExecution({
   }, [exec.status]);
 
   const bookId = exec.args?.bookId as string | undefined;
+  const forecastDetails = getNarrativeForecastPreviewDetails(exec);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border border-border/40 bg-card/60">
@@ -711,7 +723,12 @@ function PipelineExecution({
       <ScriptStoryboardResultPreview exec={exec} onOpenFilmStudio={onOpenFilmStudio} />
       <PlayResultPreview exec={exec} />
       <PlayEditPreview exec={exec} />
-      {typeof exec.result === "string" && exec.result.trim() && (
+      <NarrativeForecastPreview
+        exec={exec}
+        onSelectBranch={onSelectNarrativeBranch}
+        onRecheck={onRecheckNarrativeForecast}
+      />
+      {!forecastDetails && typeof exec.result === "string" && exec.result.trim() && (
         <PipelineResultDetails result={exec.result} defaultOpen={toolDetailsDefaultOpen} />
       )}
       <CollapsibleContent>
@@ -842,6 +859,8 @@ export interface ToolExecutionStepsProps {
   onProposedAction?: (details: ProposedActionDetails) => void;
   onRejectProposedAction?: (details: ProposedActionDetails) => void;
   onOpenFilmStudio?: (projectId: string) => void;
+  onSelectNarrativeBranch?: (forecastId: string, branchId: string) => void | Promise<void>;
+  onRecheckNarrativeForecast?: (forecastId: string) => void | Promise<void>;
 }
 
 /**
@@ -875,7 +894,14 @@ export function groupToolExecutionsChronologically(executions: ToolExecution[]):
   return groups;
 }
 
-export const ToolExecutionSteps = memo(function ToolExecutionSteps({ executions, onProposedAction, onRejectProposedAction, onOpenFilmStudio }: ToolExecutionStepsProps) {
+export const ToolExecutionSteps = memo(function ToolExecutionSteps({
+  executions,
+  onProposedAction,
+  onRejectProposedAction,
+  onOpenFilmStudio,
+  onSelectNarrativeBranch,
+  onRecheckNarrativeForecast,
+}: ToolExecutionStepsProps) {
   const groups = useMemo(() => groupToolExecutionsChronologically(executions), [executions]);
 
   return (
@@ -889,6 +915,8 @@ export const ToolExecutionSteps = memo(function ToolExecutionSteps({ executions,
                 onProposedAction={onProposedAction}
                 onRejectProposedAction={onRejectProposedAction}
                 onOpenFilmStudio={onOpenFilmStudio}
+                onSelectNarrativeBranch={onSelectNarrativeBranch}
+                onRecheckNarrativeForecast={onRecheckNarrativeForecast}
               />
             )
           : <UtilityToolsGroup key={`utils-${i}`} execs={g.execs} />

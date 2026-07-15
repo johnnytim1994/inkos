@@ -141,6 +141,29 @@ describe("groupChronologically", () => {
     expect(groups[1].type === "pipeline" ? groups[1].exec.tool : "").toBe("context_compression");
   });
 
+  it("renders narrative forecast operations as visible pipeline cards", () => {
+    const execs: ToolExecution[] = [
+      makeExec({ id: "1", tool: "read", label: "读取章节" }),
+      makeExec({ id: "2", tool: "create_narrative_forecast", label: "剧情推演" }),
+      makeExec({ id: "3", tool: "get_narrative_forecast", label: "核验推演" }),
+      makeExec({ id: "4", tool: "select_narrative_branch", label: "采用分支" }),
+      makeExec({ id: "5", tool: "grep", label: "搜索" }),
+    ];
+
+    const groups = groupToolExecutionsChronologically(execs);
+
+    expect(groups.map((group) => group.type)).toEqual([
+      "utilities",
+      "pipeline",
+      "pipeline",
+      "pipeline",
+      "utilities",
+    ]);
+    expect(groups[1].type === "pipeline" ? groups[1].exec.tool : "").toBe("create_narrative_forecast");
+    expect(groups[2].type === "pipeline" ? groups[2].exec.tool : "").toBe("get_narrative_forecast");
+    expect(groups[3].type === "pipeline" ? groups[3].exec.tool : "").toBe("select_narrative_branch");
+  });
+
   it("renders generic pipeline result text in an expandable details block", () => {
     const exec = makeExec({
       id: "writer-1",

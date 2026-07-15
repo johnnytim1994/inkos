@@ -21,6 +21,10 @@ import {
 import { ChatMessage } from "../components/chat/ChatMessage";
 import { QuickActions } from "../components/chat/QuickActions";
 import { ToolExecutionSteps, type ProposedActionDetails } from "../components/chat/ToolExecutionSteps";
+import {
+  buildNarrativeForecastRecheckInstruction,
+  buildNarrativeForecastSelectionInstruction,
+} from "../components/chat/NarrativeForecastPreview";
 import { ProjectArtifactDrawer } from "../components/chat/ProjectArtifactDrawer";
 import { PlayHud } from "../components/chat/PlayHud";
 import { PlayChoicePanel } from "../components/chat/PlayChoicePanel";
@@ -823,6 +827,34 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
     });
   };
 
+  const handleSelectNarrativeBranch = async (forecastId: string, branchId: string) => {
+    if (!activeSessionId || !activeBookId) return;
+    autoScrollPinnedRef.current = true;
+    await sendMessage(
+      activeSessionId,
+      buildNarrativeForecastSelectionInstruction(forecastId, branchId, isZh ? "zh" : "en"),
+      {
+        activeBookId,
+        sessionKind: "book",
+        actionSource: "button",
+      },
+    );
+  };
+
+  const handleRecheckNarrativeForecast = async (forecastId: string) => {
+    if (!activeSessionId || !activeBookId) return;
+    autoScrollPinnedRef.current = true;
+    await sendMessage(
+      activeSessionId,
+      buildNarrativeForecastRecheckInstruction(forecastId, isZh ? "zh" : "en"),
+      {
+        activeBookId,
+        sessionKind: "book",
+        actionSource: "button",
+      },
+    );
+  };
+
   useEffect(() => { setPlayImageError(null); }, [activeSessionId]);
 
   useEffect(() => {
@@ -987,6 +1019,8 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
                               onProposedAction={handleProposedAction}
                               onRejectProposedAction={handleRejectProposedAction}
                               onOpenFilmStudio={nav.toFilmStudio}
+                              onSelectNarrativeBranch={handleSelectNarrativeBranch}
+                              onRecheckNarrativeForecast={handleRecheckNarrativeForecast}
                             />
                           );
                         }
