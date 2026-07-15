@@ -160,6 +160,16 @@ describe("narrative forecast runner", () => {
     expect(onDisk.status).toBe("stale");
   });
 
+  it("marks a forecast stale after the story frame changes", async () => {
+    stubAgent();
+    await createNarrativeForecast(createOptions());
+    await writeFile(join(bookDir, "story", "outline", "story_frame.md"), "# 故事框架\n都市复仇改为悬疑探案", "utf-8");
+
+    const result = await getNarrativeForecast({ projectRoot: root, bookId: BOOK_ID, forecastId: FIXED_ID });
+
+    expect(result.stale).toBe(true);
+  });
+
   it("selects a branch by writing only selected-branch-plan.md", async () => {
     stubAgent();
     await createNarrativeForecast(createOptions());

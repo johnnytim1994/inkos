@@ -39,10 +39,10 @@ export async function buildForecastContext(params: {
   const { bookDir, bookId } = params;
   const storyDir = join(bookDir, "story");
 
-  const [bookConfig, baseChapter, stateFiles] = await Promise.all([
+  const [bookConfig, baseChapter, fingerprintFiles] = await Promise.all([
     readBookConfig(bookDir),
     resolveBaseChapter(bookDir),
-    readStateFiles(bookDir),
+    collectFingerprintFiles(bookDir),
   ]);
 
   const [authorIntent, currentFocus, currentState, pendingHooks] = await Promise.all([
@@ -62,13 +62,7 @@ export async function buildForecastContext(params: {
 
   const contextFingerprint = computeContextFingerprint({
     baseChapter,
-    files: [
-      ...stateFiles.map(({ name, content }) => [`story/state/${name}`, content] as const),
-      ["story/author_intent.md", authorIntent] as const,
-      ["story/current_focus.md", currentFocus] as const,
-      ["story/current_state.md", currentState] as const,
-      ["story/pending_hooks.md", pendingHooks] as const,
-    ],
+    files: fingerprintFiles,
   });
 
   return {
@@ -94,9 +88,10 @@ export async function buildForecastContext(params: {
 }
 
 /**
- * Content hash over the canonical forecast inputs (chapter count + state and
- * control document contents). Deliberately mtime-free so copies, checkouts
- * and CI runs produce identical fingerprints for identical canon.
+ * Content hash over the canonical forecast inputs (chapter count + every file
+ * this builder feeds into the prompt). Deliberately mtime-free and
+ * order-independent so copies, checkouts and CI runs produce identical
+ * fingerprints for identical canon.
  */
 export function computeContextFingerprint(input: {
   readonly baseChapter: number;
@@ -107,6 +102,74 @@ export function computeContextFingerprint(input: {
     files: [...input.files].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
   });
   return createHash("sha256").update(canonical, "utf8").digest("hex");
+}
+
+// Every fixed-path file buildForecastContext (directly or via its helpers)
+// reads into the prompt, including the legacy fallbacks readStoryFrame /
+// readVolumeMap / readCharacterContext may resolve to. story/runtime/** —
+// where forecasts themselves live — is deliberately NOT part of this list,
+// so a forecast can never invalidate itself.
+const FINGERPRINT_FIXED_INPUTS: ReadonlyArray<string> = [
+  "book.json",
+  "story/author_intent.md",
+  "story/chapter_summaries.md",
+  "story/character_matrix.md",
+  "story/current_focus.md",
+  "story/current_state.md",
+  "story/outline/story_frame.md",
+  "story/outline/volume_map.md",
+  "story/pending_hooks.md",
+  "story/story_bible.md",
+  "story/subplot_board.md",
+  "story/volume_outline.md",
+];
+
+// Same tier directories readRoleCards enumerates.
+const FINGERPRINT_ROLE_DIRS: ReadonlyArray<string> = ["主要角色", "次要角色", "major", "minor"];
+
+/**
+ * Enumerate every context input as [relative posix path, content] pairs.
+ * A missing file contributes no entry while an existing empty file
+ * contributes ["path", ""], so creating, deleting or renaming an input file
+ * always changes the fingerprint — not only editing its content.
+ */
+async function collectFingerprintFiles(
+  bookDir: string,
+): Promise<ReadonlyArray<readonly [string, string]>> {
+  const [fixedEntries, stateFiles, roleEntryGroups] = await Promise.all([
+    Promise.all(FINGERPRINT_FIXED_INPUTS.map(async (relPath) => {
+      const content = await readIfExists(join(bookDir, relPath));
+      return content === null ? null : ([relPath, content] as const);
+    })),
+    readStateFiles(bookDir),
+    Promise.all(FINGERPRINT_ROLE_DIRS.map(async (tier) => {
+      const dir = join(bookDir, "story", "roles", tier);
+      let names: string[];
+      try {
+        names = (await readdir(dir)).filter((name) => name.endsWith(".md"));
+      } catch {
+        return [];
+      }
+      return Promise.all(names.map(async (name) =>
+        [`story/roles/${tier}/${name}`, await readOrEmpty(join(dir, name))] as const));
+    })),
+  ]);
+
+  return [
+    ...fixedEntries.filter((entry): entry is readonly [string, string] => entry !== null),
+    ...stateFiles.map(({ name, content }) => [`story/state/${name}`, content] as const),
+    ...roleEntryGroups.flat(),
+  ];
+}
+
+/** Read a file's content, or null when it does not exist. */
+async function readIfExists(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 export function renderForecastContextMarkdown(context: ForecastContext): string {
