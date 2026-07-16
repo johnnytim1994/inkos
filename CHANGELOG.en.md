@@ -2,6 +2,34 @@
 
 [中文](CHANGELOG.md) | English
 
+## v1.7.1
+
+### Release Focus
+
+Narrative forecasting and non-blocking Studio collaboration. Long-form authors can generate, compare, and re-check multiple non-canonical futures before committing to the next chapter. Selecting a branch saves a candidate plan only; it does not change prose, outlines, or canon. Production work such as chapter writing now runs as a background task, so users can keep chatting, restore progress after refresh, retry failed messages, and rely on clearer task and data boundaries.
+
+### Major Features
+
+- Added long-form narrative forecasts: generate 2-5 isolated futures from current canon and compare chapter beats, character decisions, projected changes, risks, author-intent alignment, and uncertainties
+- Added an inline Studio Chat comparison card with branch selection and stale-forecast re-checking. Selection writes only `selected-branch-plan.md`; prose, foundations, outlines, and runtime canon remain unchanged
+- Added `inkos forecast create / show / select` to the CLI, sharing the same forecast schema, store, context fingerprints, agent, runner, and non-canonical boundary as Core
+- Added whole-book backup / restore and safe latest-chapter deletion with chapter-state rollback, preventing prose and runtime state from drifting apart
+
+### Collaboration And Task Reliability
+
+- Moved `write_next` onto Studio's background-task system, allowing conversation to continue while production work runs instead of occupying the entire Chat request
+- Tagged and persisted task progress by execution id, restored the correct task card after refresh, and prevented terminal task snapshots from closing a still-streaming chat response
+- Added failed-message retry, production-task abort when its session is deleted, and cleanup of zombie running snapshots after server restart
+- Reserved the single production slot atomically and blocked conflicting book mutations while still allowing read-only tools and narrative forecasts
+- Fixed direct terminal tool calls disappearing from restored sessions; completion remains derived from real tool results
+
+### Data Safety And Compatibility
+
+- Chapter patch edits now update index word counts so persisted prose and statistics stay aligned
+- Aligned short-fiction length validation between confirmation and runner, and made output language follow the user's current request
+- Fixed stale Play choices reviving during task switching or replay and stopped deleted sessions from receiving new transcript messages
+- Updated the Xiaomi MiMo API endpoint and improved Studio event classification so id-less or compaction events do not pollute background task cards
+
 ## v1.7.0
 
 ### Release Focus

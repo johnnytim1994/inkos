@@ -38,6 +38,16 @@ InkOS Studio already supports Moonshot (Kimi). Get an API key from the Kimi Open
 
 > 💡 **One key for global frontier models** — pair InkOS with [**kkaiapi**](https://en.kkaiapi.com/): an OpenAI-compatible gateway for Claude, GPT, Gemini, DeepSeek, Kimi, Qwen, GLM, and image models. Add it as a custom service with base URL `https://api.kkaiapi.com/v1`, then switch models in Studio without juggling multiple provider accounts.
 
+## v1.7.1 Narrative Forecasts and Non-Blocking Studio Collaboration
+
+InkOS 1.7.1 lets long-form authors compare possible futures before committing to the next chapter. Studio Chat generates isolated candidate branches from current canon and compares their chapter beats, character decisions, projected changes, risks, and author-intent alignment. Selecting a branch saves a candidate plan only; it does not pre-emptively modify prose, outlines, or story state.
+
+- **Narrative forecasts**: create, re-check, and select 2-5 non-canonical futures from Studio Chat or the CLI. Forecasts become stale when canon changes.
+- **Keep chatting while InkOS writes**: chapter production runs in the background instead of occupying the whole conversation, with progress and terminal state restored after refresh.
+- **More reliable task recovery**: retry failed messages, abort production when its session is deleted, clean up zombie task snapshots after restart, and prevent stale task or Play state from reviving.
+- **Safer creative data**: whole-book backup / restore, latest-chapter deletion with state rollback, and synchronized chapter-index word counts after patch edits.
+- **Traceable tool results**: direct terminal tool calls restore as complete cards after refresh, while completion remains grounded in actual tool results and files.
+
 ## v1.7.0 Multilingual Translation, Cross-Language Creation, and Long-Task Reliability
 
 InkOS 1.7.0 connects creation, collaboration, source reading, revision, and cross-language delivery through the same Agent workbench. Import EPUB, text-based PDF, TXT, or Markdown; choose source and target languages in plain language; then translate by chapter, maintain terminology, review source and translation side by side, and export the complete result. Studio Chat also continues to support attachments, existing-novel import, prompt editing, chapter revision, and abortable long-running tasks.

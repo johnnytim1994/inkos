@@ -1,7 +1,7 @@
 ---
 name: inkos
 description: Story Creation and Translation AI Agent with Studio Chat, CLI, and TUI - use for long-form novels, short fiction, scripts, storyboards, interactive-film projects, open-world / branching play, fan fiction, spinoffs, style imitation, continuations, covers, and multilingual EPUB/PDF/TXT/Markdown translation. Includes runtime skills, traceable research, governed context, persistent story state, multi-model routing, image services, and InkOS Studio.
-version: 2.6.0
+version: 2.7.0
 metadata: { "openclaw": { "emoji": "📖", "requires": { "bins": ["inkos", "node"], "env": ["OPENAI_API_KEY"] }, "primaryEnv": "OPENAI_API_KEY", "homepage": "https://github.com/Narcooo/inkos", "install": [{ "id": "npm", "kind": "node", "package": "@actalk/inkos", "label": "Install InkOS (npm)" }] } }
 ---
 
@@ -16,9 +16,9 @@ Long-form writing still uses the chapter pipeline internally:
 
 Truth files are persisted as schema-validated JSON (`story/state/*.json`) with markdown projections for human readability. SQLite temporal memory database (`story/memory.db`) enables relevance-based retrieval on Node 22+.
 
-## v1.7.0 Mental Model
+## v1.7.1 Mental Model
 
-Treat InkOS as a confirmable action system, not a bag of prompt shortcuts.
+Treat InkOS as a confirmable action system, not a bag of prompt shortcuts. v1.7.1 adds non-canonical narrative forecasting, background production tasks that do not block discussion, retryable task state, whole-book backup / restore, and rollback-safe latest-chapter deletion.
 
 - Natural-language requests should go through Studio Chat / TUI / `inkos interact` whenever possible.
 - Do not infer success from assistant prose. A book, short, cover, or play step is complete only when the corresponding tool result and files exist.
@@ -30,6 +30,7 @@ Treat InkOS as a confirmable action system, not a bag of prompt shortcuts.
 - Use `research_web` only when the user explicitly asks for external facts, market references, era/profession details, or worldbuilding research. Research reports are reference material and do not automatically mutate canon or prose.
 - Use long-form chapter tools only for existing long-form books.
 - Use narrative forecasts when the author wants to compare possible long-form directions before writing. A forecast is non-canonical planning material: selecting a branch may write `selected-branch-plan.md`, but it must not be described as changing prose, outlines, or canonical state.
+- A running production task does not prevent ordinary discussion, but do not start another conflicting book mutation until that task reaches a terminal state.
 - Runtime skills provide professional rules, prompt packs, and context requirements. They do not grant new file, network, image, or writing permissions by themselves.
 - Context is governed: protected facts and current intent should not be silently compressed away; compressible history may be summarized when the context budget is tight.
 - Studio Chat can receive user-uploaded text / Markdown / image attachments. Text attachments are injected into the LLM context; image attachments require a vision-capable model.
